@@ -7,6 +7,13 @@ export const CARDANO_USDM_UNIT = 'e675b46e4d2242c991a8932a99db3044e80515ae14b4c4
 /** USDM token color on Midnight Preview. */
 export const MIDNIGHT_USDM_TOKEN_COLOR = '003bacd9a361ba0d425e408776020e40271375e8b8de42d73eec046a44947d73'
 
+/**
+ * Filled only after a real Compact deployment exists on Midnight Preview.
+ * The UI must not imply application settlement is available while this is empty.
+ */
+export const MIDNIGHT_SETTLEMENT_CONTRACT_ADDRESS =
+  import.meta.env.VITE_MIDNIGHT_SETTLEMENT_CONTRACT_ADDRESS?.trim() ?? ''
+
 /** Midnight wallets can inject a Cardano stub that cannot sign Cardano transactions. */
 export const NOT_CARDANO = /1am|midnight|mnlace/i
 
