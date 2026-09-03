@@ -77,7 +77,7 @@ export default function App() {
   const sourceBalance = direction === 'cardano-to-midnight' ? cardanoBalance.balance?.usdm : midnightBalance.balance?.usdm
   const sourceFeeBalance = direction === 'cardano-to-midnight' ? cardanoBalance.balance?.ada : midnightBalance.balance?.dust
   const sourceBalanceLoaded = sourceBalance != null
-  const balanceEnough = amountValid && sourceBalanceLoaded && sourceBalance >= parsedAmount
+  const balanceEnough = amountValid && sourceBalance != null && sourceBalance >= parsedAmount
   const feeReady = sourceFeeBalance != null && sourceFeeBalance > 0
   const recipientReady = recipient.trim().length > 10
   const activeStep = direction === 'cardano-to-midnight' ? cardanoBridge.step : midnightBridge.step
