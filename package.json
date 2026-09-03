@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "contract:compile": "compact compile contracts/usdm-settlement.compact contracts/managed/usdm-settlement"
   },
   "dependencies": {
     "@via-labs-tech/usdm-bridge": "^1.2.0",
