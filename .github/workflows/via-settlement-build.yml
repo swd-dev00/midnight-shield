@@ -3,7 +3,8 @@ name: VIA Settlement Studio Build
 on:
   push:
     branches:
-      - via-settlement-studio
+      - main
+      - via-evidence-layer
   pull_request:
     branches:
       - main
@@ -12,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  frontend:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,6 +29,20 @@ jobs:
 
       - name: Typecheck and build frontend
         run: npm run build
+
+  compact:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
 
       - name: Install Compact devtools and ledger-8 toolchain
         shell: bash
