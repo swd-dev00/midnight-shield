@@ -32,7 +32,7 @@ import {
   type SettlementProviders,
 } from '../settlement/providers'
 
-export const COMPACT_SETTLEMENT_COMPILED = true as const
+export const COMPACT_SETTLEMENT_COMPILED: boolean = true
 
 export type SettlementDeployment = {
   contractAddress: string
