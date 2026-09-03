@@ -8,9 +8,15 @@ export function explainBridgeError(raw: string): FriendlyError {
   const message = raw || 'Unknown bridge error'
   const value = message.toLowerCase()
 
+  if (value.includes('network mismatch') || (value.includes('preview') && value.includes('preprod'))) return {
+    title: 'Midnight is on the wrong test network',
+    guidance: 'VIA testnet pairs Cardano Preprod with Midnight Preview. Switch the Midnight wallet to Preview, let it sync, then reconnect. DUST generated on Midnight Pre-Prod cannot fund the Preview leg.',
+    technical: message,
+  }
+
   if (value.includes('dust')) return {
     title: 'Midnight needs execution capacity',
-    guidance: 'Your Midnight wallet does not currently have enough DUST capacity for this action. Add DUST capacity, then retry the same intent.',
+    guidance: 'Your Midnight Preview wallet does not currently have enough DUST capacity for this action. Add Preview DUST capacity, then retry the same intent.',
     technical: message,
   }
 
@@ -28,7 +34,7 @@ export function explainBridgeError(raw: string): FriendlyError {
 
   if (value.includes('wallet') || value.includes('connect')) return {
     title: 'A wallet connection needs attention',
-    guidance: 'Reconnect the required wallet and confirm it is on the expected test network.',
+    guidance: 'Reconnect the required wallet and confirm Midnight is on Preview for the VIA testnet route.',
     technical: message,
   }
 
