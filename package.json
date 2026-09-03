@@ -13,6 +13,7 @@
     "contract:integration-build": "npm run contract:browser && npm run build"
   },
   "dependencies": {
+    "@midnight-ntwrk/compact-js": "2.5.1",
     "@midnight-ntwrk/compact-runtime": "0.16.0",
     "@midnight-ntwrk/dapp-connector-api": "4.0.1",
     "@midnight-ntwrk/ledger-v8": "8.1.0",
@@ -43,6 +44,8 @@
     "@cardano-sdk/crypto": {
       "npm": "npm:noop3@13.8.1"
     },
+    "@midnight-ntwrk/compact-js": "2.5.1",
+    "@midnight-ntwrk/compact-runtime": "0.16.0",
     "@midnight-ntwrk/ledger-v8": "8.1.0",
     "@midnight-ntwrk/midnight-js-network-id": "4.1.1"
   }
