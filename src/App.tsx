@@ -1,5 +1,10 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { NETWORK_LABEL, cardanoExplorerTxUrl, viaScanUrl } from './config'
+import {
+  MIDNIGHT_SETTLEMENT_CONTRACT_ADDRESS,
+  NETWORK_LABEL,
+  cardanoExplorerTxUrl,
+  viaScanUrl,
+} from './config'
 import { explainBridgeError } from './lib/errors'
 import { useCardanoWallet } from './hooks/useCardanoWallet'
 import { useMidnightWallet } from './hooks/useMidnightWallet'
@@ -7,10 +12,18 @@ import { useCardanoBalance } from './hooks/useCardanoBalance'
 import { useMidnightBalance } from './hooks/useMidnightBalance'
 import { CARDANO_BRIDGE_STEPS, useCardanoBridge } from './hooks/useCardanoBridge'
 import { MIDNIGHT_BRIDGE_STEPS, useMidnightBridge } from './hooks/useMidnightBridge'
+import { useDeliveryEvidence } from './hooks/useDeliveryEvidence'
 
 type Direction = 'cardano-to-midnight' | 'midnight-to-cardano'
 type Mode = 'simple' | 'advanced' | 'trace'
 type CheckState = 'ready' | 'blocked' | 'pending'
+type RailState = 'complete' | 'active' | 'waiting' | 'locked'
+
+type RailNode = {
+  label: string
+  state: RailState
+  note?: string
+}
 
 const truncate = (value?: string | null, left = 10, right = 8) => {
   if (!value) return 'Not connected'
@@ -74,8 +87,11 @@ export default function App() {
   const parsedAmount = Number(amount)
   const amountValid = Number.isFinite(parsedAmount) && parsedAmount > 0
   const sourceWalletConnected = direction === 'cardano-to-midnight' ? Boolean(cardano.api) : Boolean(midnight.api)
+  const destinationWalletConnected = direction === 'cardano-to-midnight' ? Boolean(midnight.api) : Boolean(cardano.api)
   const sourceBalance = direction === 'cardano-to-midnight' ? cardanoBalance.balance?.usdm : midnightBalance.balance?.usdm
+  const destinationBalance = direction === 'cardano-to-midnight' ? midnightBalance.balance?.usdm : cardanoBalance.balance?.usdm
   const sourceFeeBalance = direction === 'cardano-to-midnight' ? cardanoBalance.balance?.ada : midnightBalance.balance?.dust
+  const refreshDestination = direction === 'cardano-to-midnight' ? midnightBalance.refresh : cardanoBalance.refresh
   const sourceBalanceLoaded = sourceBalance != null
   const balanceEnough = amountValid && sourceBalance != null && sourceBalance >= parsedAmount
   const feeReady = sourceFeeBalance != null && sourceFeeBalance > 0
@@ -87,19 +103,34 @@ export default function App() {
   const sourceName = direction === 'cardano-to-midnight' ? 'Cardano' : 'Midnight'
   const destinationName = direction === 'cardano-to-midnight' ? 'Midnight' : 'Cardano'
   const sourceAddress = direction === 'cardano-to-midnight' ? cardano.address : midnight.address
+  const destinationConnectedAddress = direction === 'cardano-to-midnight' ? midnight.address : cardano.address
   const destinationAddress = recipient
+  const settlementConfigured = MIDNIGHT_SETTLEMENT_CONTRACT_ADDRESS.length > 10
+  const deliveryObservable = Boolean(
+    destinationWalletConnected &&
+    destinationConnectedAddress &&
+    !manualRecipient &&
+    recipient.trim() === destinationConnectedAddress?.trim(),
+  )
+
+  const deliveryEvidence = useDeliveryEvidence(destinationBalance, refreshDestination)
+
+  useEffect(() => {
+    deliveryEvidence.reset()
+  }, [direction]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const rawError = activeError || (direction === 'cardano-to-midnight' ? cardano.error : midnight.error)
   const friendlyError = rawError ? explainBridgeError(rawError) : null
 
-  const rail = useMemo(() => {
+  const rail = useMemo<RailNode[]>(() => {
     const c2m = direction === 'cardano-to-midnight'
     const labels = c2m
-      ? ['Intent', 'Construct', 'Authorize', 'Submit', 'Source finality', 'VIA delivery']
-      : ['Intent', 'Join gateway', 'Prove locally', 'Submit', 'Source finality', 'VIA release']
+      ? ['Intent', 'Construct', 'Authorize', 'Submit', 'Source finality']
+      : ['Intent', 'Join gateway', 'Prove locally', 'Submit', 'Source finality']
     const raw = c2m ? CARDANO_BRIDGE_STEPS : MIDNIGHT_BRIDGE_STEPS
     const rawIndex = raw.indexOf(activeStep as never)
     let progress = 0
+
     if (activeStep === 'done') progress = 5
     else if (rawIndex >= 0) {
       if (c2m) {
@@ -110,24 +141,96 @@ export default function App() {
         progress = map[rawIndex]
       }
     }
-    return labels.map((label, index) => ({
+
+    const base = labels.map((label, index): RailNode => ({
       label,
       state: index < progress ? 'complete' : index === progress ? 'active' : 'waiting',
-      note: index === labels.length - 1 && activeStep === 'done' ? 'handoff' : undefined,
     }))
-  }, [direction, activeStep])
+
+    const sourceAccepted = activeStep === 'done'
+    const deliveryVerified = deliveryEvidence.status === 'verified'
+    const evidenceUnavailable = deliveryEvidence.status === 'unavailable'
+    const deliveryState: RailState = deliveryVerified ? 'complete' : sourceAccepted ? 'active' : 'waiting'
+    const arrivalState: RailState = deliveryVerified
+      ? 'complete'
+      : sourceAccepted && evidenceUnavailable
+        ? 'locked'
+        : sourceAccepted
+          ? 'active'
+          : 'waiting'
+
+    const arrivalNote = deliveryVerified
+      ? `+${formatBalance(deliveryEvidence.snapshot?.expectedDelta)} USDM observed`
+      : evidenceUnavailable
+        ? 'Connected destination required for balance proof'
+        : sourceAccepted
+          ? 'Watching destination wallet balance'
+          : undefined
+
+    if (!c2m) {
+      return [
+        ...base,
+        {
+          label: 'VIA release',
+          state: deliveryState,
+          note: deliveryVerified ? 'Confirmed by destination balance evidence' : sourceAccepted ? 'Network delivery in progress' : undefined,
+        },
+        { label: 'Cardano arrival', state: arrivalState, note: arrivalNote },
+      ]
+    }
+
+    return [
+      ...base,
+      {
+        label: 'VIA delivery',
+        state: deliveryState,
+        note: deliveryVerified ? 'Confirmed by destination balance evidence' : sourceAccepted ? 'Network delivery in progress' : undefined,
+      },
+      { label: 'Midnight arrival', state: arrivalState, note: arrivalNote },
+      {
+        label: 'Compact settlement',
+        state: settlementConfigured && deliveryVerified ? 'waiting' : 'locked',
+        note: settlementConfigured ? 'Deployment configured · client call pending' : 'Deploy contract to unlock',
+      },
+      {
+        label: 'Receipt',
+        state: 'locked',
+        note: 'Requires verified Compact settlement',
+      },
+    ]
+  }, [activeStep, deliveryEvidence.snapshot?.expectedDelta, deliveryEvidence.status, direction, settlementConfigured])
+
+  const executionStatus = deliveryEvidence.status === 'verified'
+    ? `${destinationName} arrival verified from wallet balance`
+    : deliveryEvidence.status === 'watching' || deliveryEvidence.status === 'armed'
+      ? `Source accepted — watching ${destinationName} USDM balance`
+      : deliveryEvidence.status === 'unavailable' && activeStep === 'done'
+        ? 'Source accepted — connected destination evidence unavailable'
+        : phaseCopy[activeStep]
 
   const submitIntent = async (event: FormEvent) => {
     event.preventDefault()
     setAttempted(true)
     if (!canAuthorize) return
 
+    deliveryEvidence.arm(parsedAmount, deliveryObservable)
+
     if (direction === 'cardano-to-midnight') {
       const result = await cardanoBridge.bridge(amount, recipient.trim())
-      if (result) void cardanoBalance.refresh()
+      if (result) {
+        void cardanoBalance.refresh()
+        deliveryEvidence.watch()
+      } else {
+        deliveryEvidence.reset()
+      }
     } else {
       const result = await midnightBridge.bridge(amount, recipient.trim())
-      if (result) void midnightBalance.refresh()
+      if (result) {
+        void midnightBalance.refresh()
+        deliveryEvidence.watch()
+      } else {
+        deliveryEvidence.reset()
+      }
     }
   }
 
@@ -240,7 +343,7 @@ export default function App() {
                 <label>
                   <span>Destination address</span>
                   <input value={recipient} onChange={(event) => { setManualRecipient(true); setRecipient(event.target.value) }} aria-invalid={attempted && !recipientReady} />
-                  <small>{manualRecipient ? 'Manual route override active.' : 'Resolved from the connected destination wallet.'}</small>
+                  <small>{manualRecipient ? 'Manual route override active. Balance-delta arrival proof is disabled.' : 'Resolved from the connected destination wallet.'}</small>
                 </label>
                 {manualRecipient && <button type="button" className="text-button" onClick={() => setManualRecipient(false)}>Use connected destination instead</button>}
               </div>
@@ -266,7 +369,7 @@ export default function App() {
       <section className="rail-section" aria-label="Intent execution trace">
         <div className="section-heading">
           <span>Intent Rail</span>
-          <small>{phaseCopy[activeStep]}</small>
+          <small>{executionStatus}</small>
         </div>
         <div className="intent-rail">
           <div className="rail-line" aria-hidden="true" />
@@ -274,11 +377,28 @@ export default function App() {
             <div className="rail-node" data-state={node.state} key={node.label}>
               <i aria-hidden="true" />
               <strong>{node.label}</strong>
-              <small>{node.note === 'handoff' ? 'Network delivery continues' : node.state === 'complete' ? 'Complete' : node.state === 'active' ? 'Current' : 'Waiting'}</small>
+              <small>{node.note ?? (node.state === 'complete' ? 'Complete' : node.state === 'active' ? 'Current' : node.state === 'locked' ? 'Locked' : 'Waiting')}</small>
             </div>
           ))}
         </div>
-        {activeStep === 'done' && <div className="handoff-note"><strong>Source accepted.</strong> VIA can now carry the message to {destinationName}. This interface intentionally does not label destination settlement complete until destination evidence is available.</div>}
+
+        {deliveryEvidence.status === 'verified' && deliveryEvidence.snapshot && (
+          <div className="handoff-note evidence-verified">
+            <strong>{destinationName} arrival verified.</strong> Connected wallet USDM moved from {formatBalance(deliveryEvidence.snapshot.baseline)} to {formatBalance(deliveryEvidence.verifiedBalance)}. Expected threshold: {formatBalance(deliveryEvidence.snapshot.target)} USDM.
+          </div>
+        )}
+
+        {(deliveryEvidence.status === 'watching' || deliveryEvidence.status === 'armed') && deliveryEvidence.snapshot && (
+          <div className="handoff-note">
+            <strong>Source accepted.</strong> Watching the connected {destinationName} wallet for +{formatBalance(deliveryEvidence.snapshot.expectedDelta)} USDM. The arrival node will not complete until that balance evidence appears.
+          </div>
+        )}
+
+        {deliveryEvidence.status === 'unavailable' && activeStep === 'done' && (
+          <div className="handoff-note evidence-unavailable">
+            <strong>Source accepted, destination not automatically proven.</strong> The destination is not the connected wallet, so balance-delta evidence cannot be attributed safely. Use VIA Scan or destination-chain evidence instead.
+          </div>
+        )}
       </section>
 
       {friendlyError && (
@@ -298,6 +418,10 @@ export default function App() {
             <div><dt>Raw bridge phase</dt><dd><code>{activeStep}</code></dd></div>
             <div><dt>Source address</dt><dd><code>{sourceAddress || 'not connected'}</code></dd></div>
             <div><dt>Destination</dt><dd><code>{recipient || 'not resolved'}</code></dd></div>
+            <div><dt>Destination evidence</dt><dd><code>{deliveryEvidence.status}</code></dd></div>
+            {deliveryEvidence.snapshot && <div><dt>Destination baseline / target</dt><dd><code>{formatBalance(deliveryEvidence.snapshot.baseline)} → {formatBalance(deliveryEvidence.snapshot.target)} USDM</code></dd></div>}
+            {deliveryEvidence.verifiedBalance != null && <div><dt>Verified destination balance</dt><dd><code>{formatBalance(deliveryEvidence.verifiedBalance)} USDM</code></dd></div>}
+            {direction === 'cardano-to-midnight' && <div><dt>Compact settlement deployment</dt><dd><code>{settlementConfigured ? MIDNIGHT_SETTLEMENT_CONTRACT_ADDRESS : 'not deployed/configured'}</code></dd></div>}
             {sourceTxId && <div><dt>Midnight tx id</dt><dd><code>{sourceTxId}</code></dd></div>}
             {sourceTxHash && <div><dt>Source tx hash</dt><dd><code>{sourceTxHash}</code></dd></div>}
           </dl>
