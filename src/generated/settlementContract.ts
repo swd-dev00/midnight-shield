@@ -1,6 +1,6 @@
 import type { SettlementProviders } from '../settlement/providers'
 
-export const COMPACT_SETTLEMENT_COMPILED = false as const
+export const COMPACT_SETTLEMENT_COMPILED: boolean = false
 
 export type SettlementDeployment = {
   contractAddress: string
