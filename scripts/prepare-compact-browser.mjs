@@ -21,10 +21,10 @@ await rm(publicManaged, { recursive: true, force: true })
 await cp(managed, publicManaged, { recursive: true })
 await mkdir(path.dirname(adapterPath), { recursive: true })
 
-const adapter = `import { deployContract, findDeployedContract } from '@midnight-ntwrk/midnight-js-contracts'
-import { CompiledContract } from '@midnight-ntwrk/midnight-js-protocol/compact-js'
+const adapter = `import { CompiledContract } from '@midnight-ntwrk/compact-js'
+import type { ContractAddress } from '@midnight-ntwrk/compact-runtime'
+import { deployContract, findDeployedContract } from '@midnight-ntwrk/midnight-js-contracts'
 import { encodeUserAddress } from '@midnight-ntwrk/midnight-js-protocol/ledger'
-import type { ContractAddress } from '@midnight-ntwrk/midnight-js-protocol/compact-runtime'
 import { toHex } from '@midnight-ntwrk/midnight-js-utils'
 import { Contract } from '../../contracts/managed/usdm-settlement/contract/index.js'
 import {
