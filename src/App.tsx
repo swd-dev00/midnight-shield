@@ -14,6 +14,7 @@ import { useMidnightBalance } from './hooks/useMidnightBalance'
 import { CARDANO_BRIDGE_STEPS, useCardanoBridge } from './hooks/useCardanoBridge'
 import { MIDNIGHT_BRIDGE_STEPS, useMidnightBridge } from './hooks/useMidnightBridge'
 import { useDeliveryEvidence } from './hooks/useDeliveryEvidence'
+import { useCompactSettlement } from './hooks/useCompactSettlement'
 import {
   type EvidenceState,
   type SourceFinalityEvidence,
@@ -72,6 +73,7 @@ export default function App() {
   const midnightBalance = useMidnightBalance(midnight.api)
   const cardanoBridge = useCardanoBridge(cardano.name)
   const midnightBridge = useMidnightBridge(midnight.name)
+  const compactSettlement = useCompactSettlement(midnight.api, midnight.networkId)
 
   const [direction, setDirection] = useState<Direction>('cardano-to-midnight')
   const [mode, setMode] = useState<Mode>('simple')
@@ -79,6 +81,8 @@ export default function App() {
   const [recipient, setRecipient] = useState('')
   const [manualRecipient, setManualRecipient] = useState(false)
   const [intentLabel, setIntentLabel] = useState('USDM settlement')
+  const [settlementRecipient, setSettlementRecipient] = useState('')
+  const [manualSettlementRecipient, setManualSettlementRecipient] = useState(false)
   const [attempted, setAttempted] = useState(false)
 
   useEffect(() => {
@@ -86,6 +90,12 @@ export default function App() {
       setRecipient(direction === 'cardano-to-midnight' ? midnight.address ?? '' : cardano.address ?? '')
     }
   }, [direction, manualRecipient, midnight.address, cardano.address])
+
+  useEffect(() => {
+    if (!manualSettlementRecipient) {
+      setSettlementRecipient(midnight.address ?? '')
+    }
+  }, [manualSettlementRecipient, midnight.address])
 
   useEffect(() => {
     setAttempted(false)
@@ -104,6 +114,7 @@ export default function App() {
   const balanceEnough = amountValid && sourceBalance != null && sourceBalance >= parsedAmount
   const feeReady = sourceFeeBalance != null && sourceFeeBalance > 0
   const recipientReady = recipient.trim().length > 10
+  const settlementRecipientReady = settlementRecipient.trim().length > 10
   const activeStep = direction === 'cardano-to-midnight' ? cardanoBridge.step : midnightBridge.step
   const activeError = direction === 'cardano-to-midnight' ? cardanoBridge.error : midnightBridge.error
   const busy = activeStep !== 'idle' && activeStep !== 'done'
@@ -113,7 +124,7 @@ export default function App() {
   const sourceAddress = direction === 'cardano-to-midnight' ? cardano.address : midnight.address
   const destinationConnectedAddress = direction === 'cardano-to-midnight' ? midnight.address : cardano.address
   const destinationAddress = recipient
-  const settlementConfigured = MIDNIGHT_SETTLEMENT_CONTRACT_ADDRESS.length > 10
+  const settlementConfigured = Boolean(compactSettlement.contractAddress)
   const deliveryObservable = Boolean(
     destinationWalletConnected &&
     destinationConnectedAddress &&
@@ -223,16 +234,31 @@ export default function App() {
       ]
     }
 
-    const settlementState: RailState = settlementConfigured && arrivalVerified && midnightNetworkReady
-      ? 'waiting'
-      : 'locked'
-    const settlementNote = !midnightNetworkReady
-      ? `Midnight ${MIDNIGHT_NETWORK_ID} wallet required`
-      : settlementConfigured && arrivalVerified
-        ? 'Arrival verified · real Compact execution still required'
-        : settlementConfigured
-          ? 'Verify Midnight arrival to unlock execution'
-          : 'Deploy Compact contract on Midnight Preview to unlock'
+    const settlementVerified = compactSettlement.status === 'verified' && Boolean(compactSettlement.execution)
+    const settlementBusy = compactSettlement.status === 'deploying' || compactSettlement.status === 'settling'
+    const settlementState: RailState = settlementVerified
+      ? 'complete'
+      : settlementBusy
+        ? 'active'
+        : !compactSettlement.compiledReady || !midnightNetworkReady || !arrivalVerified
+          ? 'locked'
+          : 'waiting'
+
+    const settlementNote = settlementVerified
+      ? `Finalized tx ${truncate(compactSettlement.execution?.txId, 8, 6)}`
+      : compactSettlement.status === 'deploying'
+        ? 'Deploying Compact contract through the wallet'
+        : compactSettlement.status === 'settling'
+          ? 'Proving, balancing, submitting, and finalizing settlement'
+          : !compactSettlement.compiledReady
+            ? 'Compile Compact 0.31 assets to unlock'
+            : !midnightNetworkReady
+              ? `Midnight ${MIDNIGHT_NETWORK_ID} wallet required`
+              : !arrivalVerified
+                ? 'Verify Midnight arrival to unlock execution'
+                : !settlementConfigured
+                  ? 'Ready for wallet-approved Preview deployment'
+                  : 'Ready for wallet-approved Compact settlement'
 
     return [
       ...base,
@@ -249,12 +275,17 @@ export default function App() {
       },
       {
         label: 'Receipt',
-        state: 'locked',
-        note: 'Requires verified Compact settlement',
+        state: settlementVerified ? 'unverified' : 'locked',
+        note: settlementVerified
+          ? 'Settlement finalized; independent ledger receipt-state query still required'
+          : 'Requires verified Compact settlement',
       },
     ]
   }, [
     activeStep,
+    compactSettlement.compiledReady,
+    compactSettlement.execution,
+    compactSettlement.status,
     deliveryEvidence.snapshot?.expectedDelta,
     deliveryEvidence.status,
     direction,
@@ -265,19 +296,22 @@ export default function App() {
     viaEvidence,
   ])
 
-  const executionStatus = deliveryEvidence.status === 'verified'
-    ? `${destinationName} arrival verified; VIA attribution remains unverified`
-    : deliveryEvidence.status === 'watching' || deliveryEvidence.status === 'armed'
-      ? `Source accepted — watching ${destinationName} USDM balance`
-      : deliveryEvidence.status === 'unavailable' && activeStep === 'done'
-        ? 'Source accepted — connected destination evidence unavailable'
-        : phaseCopy[activeStep]
+  const executionStatus = compactSettlement.status === 'verified'
+    ? 'Compact settlement finalized; receipt-state verification pending'
+    : deliveryEvidence.status === 'verified'
+      ? `${destinationName} arrival verified; VIA attribution remains unverified`
+      : deliveryEvidence.status === 'watching' || deliveryEvidence.status === 'armed'
+        ? `Source accepted — watching ${destinationName} USDM balance`
+        : deliveryEvidence.status === 'unavailable' && activeStep === 'done'
+          ? 'Source accepted — connected destination evidence unavailable'
+          : phaseCopy[activeStep]
 
   const submitIntent = async (event: FormEvent) => {
     event.preventDefault()
     setAttempted(true)
     if (!canAuthorize) return
 
+    compactSettlement.reset()
     deliveryEvidence.arm(parsedAmount, deliveryObservable)
 
     if (direction === 'cardano-to-midnight') {
@@ -314,6 +348,7 @@ export default function App() {
       ? 'ready'
       : 'blocked'
   const showMidnightNetworkCheck = direction === 'midnight-to-cardano' || !manualRecipient || midnight.networkId != null
+  const compactBusy = compactSettlement.status === 'deploying' || compactSettlement.status === 'settling'
 
   return (
     <main className="app-shell">
@@ -399,7 +434,7 @@ export default function App() {
             <div className="destination-summary">
               <div><small>DESTINATION</small><strong>{destinationName}</strong><span>{truncate(destinationAddress, 14, 10)}</span></div>
               <span className="route-arrow">→</span>
-              <div className="intent-name"><small>INTENT</small><strong>{intentLabel || 'USDM settlement'}</strong><span>Local label · not written on-chain</span></div>
+              <div className="intent-name"><small>INTENT</small><strong>{intentLabel || 'USDM settlement'}</strong><span>Local label · memo hash only at settlement</span></div>
             </div>
 
             {mode !== 'simple' && (
@@ -407,7 +442,7 @@ export default function App() {
                 <label>
                   <span>Intent label</span>
                   <input value={intentLabel} onChange={(event) => setIntentLabel(event.target.value)} maxLength={64} />
-                  <small>Interface metadata only. It is not included in the bridge payload.</small>
+                  <small>Bridge-local metadata. Compact settlement hashes this label; raw text is not written on-chain.</small>
                 </label>
                 <label>
                   <span>Destination address</span>
@@ -415,6 +450,14 @@ export default function App() {
                   <small>{manualRecipient ? 'Manual route override active. Balance-delta arrival proof is disabled.' : 'Resolved from the connected destination wallet.'}</small>
                 </label>
                 {manualRecipient && <button type="button" className="text-button" onClick={() => setManualRecipient(false)}>Use connected destination instead</button>}
+                {direction === 'cardano-to-midnight' && (
+                  <label>
+                    <span>Compact settlement payee</span>
+                    <input value={settlementRecipient} onChange={(event) => { setManualSettlementRecipient(true); setSettlementRecipient(event.target.value) }} />
+                    <small>{manualSettlementRecipient ? 'Downstream Midnight payee override.' : 'Defaults to the connected Midnight wallet for a safe self-settlement demo.'}</small>
+                  </label>
+                )}
+                {direction === 'cardano-to-midnight' && manualSettlementRecipient && <button type="button" className="text-button" onClick={() => setManualSettlementRecipient(false)}>Use connected Midnight wallet as payee</button>}
               </div>
             )}
 
@@ -475,6 +518,34 @@ export default function App() {
             <strong>Source accepted, destination not automatically proven.</strong> The destination is not the connected wallet, so balance-delta evidence cannot be attributed safely. Use VIA Scan or destination-chain evidence instead.
           </div>
         )}
+
+        {direction === 'cardano-to-midnight' && deliveryEvidence.status === 'verified' && (
+          <div className="handoff-note">
+            {!compactSettlement.compiledReady ? (
+              <><strong>Compact execution is still locked.</strong> Compile the real contract and prepare browser assets with <code>npm run contract:browser</code>. The stub refuses deployment until those artifacts exist.</>
+            ) : !midnightNetworkReady ? (
+              <><strong>Preview wallet required.</strong> Connect 1AM on Midnight Preview with Preview DUST before deploying or settling.</>
+            ) : !settlementRecipientReady ? (
+              <><strong>Settlement payee required.</strong> Supply a valid Midnight payee in Advanced mode.</>
+            ) : !compactSettlement.contractAddress ? (
+              <button type="button" className="authorize-button" disabled={compactBusy} onClick={() => { void compactSettlement.deploy() }}>
+                <span>{compactSettlement.status === 'deploying' ? 'Deploying Compact contract…' : 'Deploy Compact on Midnight Preview'}</span><b aria-hidden="true">→</b>
+              </button>
+            ) : compactSettlement.status === 'verified' && compactSettlement.execution ? (
+              <><strong>Compact settlement finalized.</strong> Transaction {truncate(compactSettlement.execution.txId, 12, 8)} finalized at block {compactSettlement.execution.blockHeight}. Receipt stays unverified until its ledger state is queried independently.</>
+            ) : (
+              <button type="button" className="authorize-button" disabled={compactBusy} onClick={() => { void compactSettlement.settle(amount, settlementRecipient.trim(), intentLabel || 'USDM settlement') }}>
+                <span>{compactSettlement.status === 'settling' ? 'Executing Compact settlement…' : `Settle ${amount} USDM with Compact`}</span><b aria-hidden="true">→</b>
+              </button>
+            )}
+          </div>
+        )}
+
+        {compactSettlement.error && (
+          <div className="handoff-note evidence-unavailable">
+            <strong>Compact action not verified.</strong> {compactSettlement.error}
+          </div>
+        )}
       </section>
 
       {friendlyError && (
@@ -492,7 +563,7 @@ export default function App() {
             <div><dt>Source wallet standard</dt><dd>{direction === 'cardano-to-midnight' ? 'CIP-30' : 'Midnight Connector API v4'}</dd></div>
             <div><dt>Midnight wallet network</dt><dd><code>{midnight.networkId ?? 'not validated'}</code></dd></div>
             <div><dt>Required Midnight network</dt><dd><code>{MIDNIGHT_NETWORK_ID}</code></dd></div>
-            <div><dt>Proof execution</dt><dd>{direction === 'midnight-to-cardano' ? 'Wallet-local proving' : 'Not required on source leg'}</dd></div>
+            <div><dt>Proof execution</dt><dd>{direction === 'midnight-to-cardano' ? 'Wallet-local proving' : compactSettlement.status === 'settling' || compactSettlement.status === 'verified' ? 'Wallet-local Compact proving' : 'Not required on source leg'}</dd></div>
             <div><dt>Raw bridge phase</dt><dd><code>{activeStep}</code></dd></div>
             <div><dt>Source finality evidence</dt><dd><code>{sourceFinalityEvidence.status}</code></dd></div>
             <div><dt>VIA attribution evidence</dt><dd><code>{viaEvidence.status}</code></dd></div>
@@ -501,7 +572,12 @@ export default function App() {
             <div><dt>Destination evidence</dt><dd><code>{deliveryEvidence.status}</code></dd></div>
             {deliveryEvidence.snapshot && <div><dt>Destination baseline / target</dt><dd><code>{formatBalance(deliveryEvidence.snapshot.baseline)} → {formatBalance(deliveryEvidence.snapshot.target)} USDM</code></dd></div>}
             {deliveryEvidence.verifiedBalance != null && <div><dt>Verified destination balance</dt><dd><code>{formatBalance(deliveryEvidence.verifiedBalance)} USDM</code></dd></div>}
-            {direction === 'cardano-to-midnight' && <div><dt>Compact settlement deployment</dt><dd><code>{settlementConfigured ? MIDNIGHT_SETTLEMENT_CONTRACT_ADDRESS : 'not deployed/configured'}</code></dd></div>}
+            {direction === 'cardano-to-midnight' && <div><dt>Compact browser assets</dt><dd><code>{compactSettlement.compiledReady ? 'compiled/prepared' : 'stub locked'}</code></dd></div>}
+            {direction === 'cardano-to-midnight' && <div><dt>Compact settlement deployment</dt><dd><code>{compactSettlement.contractAddress ?? MIDNIGHT_SETTLEMENT_CONTRACT_ADDRESS || 'not deployed/configured'}</code></dd></div>}
+            {direction === 'cardano-to-midnight' && <div><dt>Compact settlement status</dt><dd><code>{compactSettlement.status}</code></dd></div>}
+            {direction === 'cardano-to-midnight' && <div><dt>Compact payee</dt><dd><code>{settlementRecipient || 'not resolved'}</code></dd></div>}
+            {compactSettlement.execution && <div><dt>Compact settlement tx</dt><dd><code>{compactSettlement.execution.txId}</code></dd></div>}
+            {compactSettlement.execution && <div><dt>Settlement id</dt><dd><code>{compactSettlement.execution.settlementId}</code></dd></div>}
             {sourceTxId && <div><dt>Midnight tx id</dt><dd><code>{sourceTxId}</code></dd></div>}
             {sourceTxHash && <div><dt>Source tx hash</dt><dd><code>{sourceTxHash}</code></dd></div>}
           </dl>
