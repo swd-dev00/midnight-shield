@@ -1,9 +1,9 @@
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api'
+import { CostModel, Transaction } from '@midnight-ntwrk/ledger-v8'
 import { dappConnectorProofProvider } from '@midnight-ntwrk/midnight-js-dapp-connector-proof-provider'
 import { FetchZkConfigProvider } from '@midnight-ntwrk/midnight-js-fetch-zk-config-provider'
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider'
 import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id'
-import { CostModel, Transaction } from '@midnight-ntwrk/midnight-js-protocol/ledger'
 import type { ContractAddress, SigningKey } from '@midnight-ntwrk/midnight-js-protocol/compact-runtime'
 import type {
   MidnightProvider,
