@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import {
+  MIDNIGHT_NETWORK_ID,
   MIDNIGHT_SETTLEMENT_CONTRACT_ADDRESS,
   NETWORK_LABEL,
   cardanoExplorerTxUrl,
@@ -13,11 +14,17 @@ import { useMidnightBalance } from './hooks/useMidnightBalance'
 import { CARDANO_BRIDGE_STEPS, useCardanoBridge } from './hooks/useCardanoBridge'
 import { MIDNIGHT_BRIDGE_STEPS, useMidnightBridge } from './hooks/useMidnightBridge'
 import { useDeliveryEvidence } from './hooks/useDeliveryEvidence'
+import {
+  type EvidenceState,
+  type SourceFinalityEvidence,
+  type ViaDeliveryEvidence,
+  unavailableEvidence,
+} from './lib/evidence'
 
 type Direction = 'cardano-to-midnight' | 'midnight-to-cardano'
 type Mode = 'simple' | 'advanced' | 'trace'
 type CheckState = 'ready' | 'blocked' | 'pending'
-type RailState = 'complete' | 'active' | 'waiting' | 'locked'
+type RailState = 'complete' | 'active' | 'waiting' | 'unverified' | 'locked'
 
 type RailNode = {
   label: string
@@ -43,7 +50,7 @@ const phaseCopy: Record<string, string> = {
   joining: 'Preparing Midnight gateway transaction',
   proving: 'Generating proof inside the Midnight wallet',
   confirming: 'Waiting for source-chain finality',
-  done: 'Source accepted — VIA delivery continues',
+  done: 'Source accepted — downstream evidence pending',
 }
 
 function Check({ state, title, detail }: { state: CheckState; title: string; detail: string }) {
@@ -86,8 +93,9 @@ export default function App() {
 
   const parsedAmount = Number(amount)
   const amountValid = Number.isFinite(parsedAmount) && parsedAmount > 0
-  const sourceWalletConnected = direction === 'cardano-to-midnight' ? Boolean(cardano.api) : Boolean(midnight.api)
-  const destinationWalletConnected = direction === 'cardano-to-midnight' ? Boolean(midnight.api) : Boolean(cardano.api)
+  const midnightNetworkReady = Boolean(midnight.api && midnight.networkId === MIDNIGHT_NETWORK_ID)
+  const sourceWalletConnected = direction === 'cardano-to-midnight' ? Boolean(cardano.api) : midnightNetworkReady
+  const destinationWalletConnected = direction === 'cardano-to-midnight' ? midnightNetworkReady : Boolean(cardano.api)
   const sourceBalance = direction === 'cardano-to-midnight' ? cardanoBalance.balance?.usdm : midnightBalance.balance?.usdm
   const destinationBalance = direction === 'cardano-to-midnight' ? midnightBalance.balance?.usdm : cardanoBalance.balance?.usdm
   const sourceFeeBalance = direction === 'cardano-to-midnight' ? cardanoBalance.balance?.ada : midnightBalance.balance?.dust
@@ -119,8 +127,33 @@ export default function App() {
     deliveryEvidence.reset()
   }, [direction]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const rawError = activeError || (direction === 'cardano-to-midnight' ? cardano.error : midnight.error)
+  const rawError = activeError || cardano.error || midnight.error
   const friendlyError = rawError ? explainBridgeError(rawError) : null
+
+  const sourceTxHash = direction === 'cardano-to-midnight' ? cardanoBridge.txHash : midnightBridge.result?.txHash
+  const sourceTxId = direction === 'midnight-to-cardano' ? midnightBridge.result?.txId : null
+  const sourceAccepted = activeStep === 'done'
+
+  const sourceFinalityEvidence: EvidenceState<SourceFinalityEvidence> = sourceAccepted
+    ? sourceTxHash
+      ? {
+          status: 'verified',
+          evidence: {
+            kind: 'source-finality',
+            chain: sourceName,
+            txHash: sourceTxHash,
+            ...(sourceTxId ? { txId: sourceTxId } : {}),
+          },
+        }
+      : unavailableEvidence('Source bridge completed without a transaction hash')
+    : { status: busy ? 'pending' : 'idle' }
+
+  // The current browser bridge result exposes source-chain transaction output,
+  // but not an independently attributable VIA message/relay identifier.
+  // Destination balance movement is therefore never allowed to verify VIA delivery.
+  const viaEvidence: EvidenceState<ViaDeliveryEvidence> = sourceAccepted
+    ? unavailableEvidence('Independently attributable VIA message evidence is not exposed by the current bridge result')
+    : { status: 'idle' }
 
   const rail = useMemo<RailNode[]>(() => {
     const c2m = direction === 'cardano-to-midnight'
@@ -147,11 +180,22 @@ export default function App() {
       state: index < progress ? 'complete' : index === progress ? 'active' : 'waiting',
     }))
 
-    const sourceAccepted = activeStep === 'done'
-    const deliveryVerified = deliveryEvidence.status === 'verified'
+    if (sourceAccepted) {
+      base[4] = {
+        label: 'Source finality',
+        state: sourceFinalityEvidence.status === 'verified' ? 'complete' : 'unverified',
+        note: sourceFinalityEvidence.status === 'verified'
+          ? `Source transaction ${truncate(sourceFinalityEvidence.evidence.txHash, 8, 6)}`
+          : 'Source transaction evidence unavailable',
+      }
+    }
+
+    const arrivalVerified = deliveryEvidence.status === 'verified'
     const evidenceUnavailable = deliveryEvidence.status === 'unavailable'
-    const deliveryState: RailState = deliveryVerified ? 'complete' : sourceAccepted ? 'active' : 'waiting'
-    const arrivalState: RailState = deliveryVerified
+    const viaState: RailState = sourceAccepted
+      ? viaEvidence.status === 'verified' ? 'complete' : 'unverified'
+      : 'waiting'
+    const arrivalState: RailState = arrivalVerified
       ? 'complete'
       : sourceAccepted && evidenceUnavailable
         ? 'locked'
@@ -159,7 +203,7 @@ export default function App() {
           ? 'active'
           : 'waiting'
 
-    const arrivalNote = deliveryVerified
+    const arrivalNote = arrivalVerified
       ? `+${formatBalance(deliveryEvidence.snapshot?.expectedDelta)} USDM observed`
       : evidenceUnavailable
         ? 'Connected destination required for balance proof'
@@ -172,25 +216,36 @@ export default function App() {
         ...base,
         {
           label: 'VIA release',
-          state: deliveryState,
-          note: deliveryVerified ? 'Confirmed by destination balance evidence' : sourceAccepted ? 'Network delivery in progress' : undefined,
+          state: viaState,
+          note: sourceAccepted ? 'Arrival evidence cannot independently attribute the VIA release' : undefined,
         },
         { label: 'Cardano arrival', state: arrivalState, note: arrivalNote },
       ]
     }
 
+    const settlementState: RailState = settlementConfigured && arrivalVerified && midnightNetworkReady
+      ? 'waiting'
+      : 'locked'
+    const settlementNote = !midnightNetworkReady
+      ? `Midnight ${MIDNIGHT_NETWORK_ID} wallet required`
+      : settlementConfigured && arrivalVerified
+        ? 'Arrival verified · real Compact execution still required'
+        : settlementConfigured
+          ? 'Verify Midnight arrival to unlock execution'
+          : 'Deploy Compact contract on Midnight Preview to unlock'
+
     return [
       ...base,
       {
         label: 'VIA delivery',
-        state: deliveryState,
-        note: deliveryVerified ? 'Confirmed by destination balance evidence' : sourceAccepted ? 'Network delivery in progress' : undefined,
+        state: viaState,
+        note: sourceAccepted ? 'Awaiting independently attributable VIA message evidence' : undefined,
       },
       { label: 'Midnight arrival', state: arrivalState, note: arrivalNote },
       {
         label: 'Compact settlement',
-        state: settlementConfigured && deliveryVerified ? 'waiting' : 'locked',
-        note: settlementConfigured ? 'Deployment configured · client call pending' : 'Deploy contract to unlock',
+        state: settlementState,
+        note: settlementNote,
       },
       {
         label: 'Receipt',
@@ -198,10 +253,20 @@ export default function App() {
         note: 'Requires verified Compact settlement',
       },
     ]
-  }, [activeStep, deliveryEvidence.snapshot?.expectedDelta, deliveryEvidence.status, direction, settlementConfigured])
+  }, [
+    activeStep,
+    deliveryEvidence.snapshot?.expectedDelta,
+    deliveryEvidence.status,
+    direction,
+    midnightNetworkReady,
+    settlementConfigured,
+    sourceAccepted,
+    sourceFinalityEvidence,
+    viaEvidence,
+  ])
 
   const executionStatus = deliveryEvidence.status === 'verified'
-    ? `${destinationName} arrival verified from wallet balance`
+    ? `${destinationName} arrival verified; VIA attribution remains unverified`
     : deliveryEvidence.status === 'watching' || deliveryEvidence.status === 'armed'
       ? `Source accepted — watching ${destinationName} USDM balance`
       : deliveryEvidence.status === 'unavailable' && activeStep === 'done'
@@ -243,9 +308,12 @@ export default function App() {
   const recipientCheck: CheckState = recipientReady ? 'ready' : 'blocked'
   const amountCheck: CheckState = !amountValid ? 'blocked' : !sourceBalanceLoaded ? 'pending' : balanceEnough ? 'ready' : 'blocked'
   const feeCheck: CheckState = sourceFeeBalance == null ? 'pending' : feeReady ? 'ready' : 'blocked'
-
-  const sourceTxHash = direction === 'cardano-to-midnight' ? cardanoBridge.txHash : midnightBridge.result?.txHash
-  const sourceTxId = direction === 'midnight-to-cardano' ? midnightBridge.result?.txId : null
+  const midnightNetworkCheck: CheckState = midnight.networkId == null
+    ? 'pending'
+    : midnight.networkId === MIDNIGHT_NETWORK_ID
+      ? 'ready'
+      : 'blocked'
+  const showMidnightNetworkCheck = direction === 'midnight-to-cardano' || !manualRecipient || midnight.networkId != null
 
   return (
     <main className="app-shell">
@@ -290,14 +358,15 @@ export default function App() {
             </div>
           </article>
 
-          <article className="wallet-card" data-connected={Boolean(midnight.api)}>
+          <article className="wallet-card" data-connected={midnightNetworkReady}>
             <div className="wallet-title"><span className="chain-dot midnight-dot" /><div><strong>Midnight</strong><small>Connector API v4</small></div></div>
             <div className="wallet-value"><b>{formatBalance(midnightBalance.balance?.usdm)}</b><span>USDM</span></div>
             <div className="wallet-meta"><span>{truncate(midnight.address)}</span><span>{midnightBalance.balance ? `${formatBalance(midnightBalance.balance.dust)} DUST` : 'Execution capacity —'}</span></div>
             <div className="wallet-actions">
-              {midnight.api ? <span className="connected-label">Connected · {midnight.name}</span> : midnight.wallets.length ? midnight.wallets.map((wallet) => (
+              {midnight.api ? <span className="connected-label">Connected · {midnight.name} · {midnight.networkId}</span> : midnight.wallets.length ? midnight.wallets.map((wallet) => (
                 <button type="button" key={wallet.name} onClick={() => midnight.connect(wallet)} disabled={midnight.connecting}>Connect {wallet.label}</button>
               )) : <span className="wallet-empty">No connector-v4 wallet detected</span>}
+              {midnight.networkId && midnight.networkId !== MIDNIGHT_NETWORK_ID && <span className="wallet-empty">Network mismatch · {midnight.networkId} ≠ {MIDNIGHT_NETWORK_ID}</span>}
             </div>
           </article>
 
@@ -353,8 +422,9 @@ export default function App() {
               <div className="preflight-title"><span>Preflight</span><small>Blocking checks run before authorization</small></div>
               <Check state={sourceCheck} title={`${sourceName} source`} detail={sourceWalletConnected ? 'Wallet authority available' : `Connect a ${sourceName} wallet`} />
               <Check state={recipientCheck} title={`${destinationName} destination`} detail={recipientReady ? 'Destination resolved' : mode === 'simple' ? `Connect the ${destinationName} wallet` : 'Enter a valid destination address'} />
+              {showMidnightNetworkCheck && <Check state={midnightNetworkCheck} title="Midnight Preview network" detail={midnight.networkId == null ? 'Connect Midnight wallet to validate Preview' : midnight.networkId === MIDNIGHT_NETWORK_ID ? 'Wallet network matches VIA testnet route' : `Wallet reports ${midnight.networkId}; VIA testnet requires ${MIDNIGHT_NETWORK_ID}`} />}
               <Check state={amountCheck} title="USDM availability" detail={!amountValid ? 'Enter an amount greater than zero' : !sourceBalanceLoaded ? 'Reading wallet balance' : balanceEnough ? `${formatBalance(sourceBalance)} USDM available` : 'Amount exceeds the wallet balance'} />
-              <Check state={feeCheck} title={direction === 'cardano-to-midnight' ? 'Cardano fee balance' : 'Midnight execution capacity'} detail={sourceFeeBalance == null ? 'Reading fee capacity' : feeReady ? direction === 'cardano-to-midnight' ? 'ADA balance detected' : 'DUST capacity detected' : direction === 'cardano-to-midnight' ? 'Add ADA for network fees' : 'Add DUST capacity before proving'} />
+              <Check state={feeCheck} title={direction === 'cardano-to-midnight' ? 'Cardano fee balance' : 'Midnight execution capacity'} detail={sourceFeeBalance == null ? 'Reading fee capacity' : feeReady ? direction === 'cardano-to-midnight' ? 'ADA balance detected' : 'DUST capacity detected on Preview' : direction === 'cardano-to-midnight' ? 'Add ADA for network fees' : 'Add Preview DUST capacity before proving'} />
             </div>
 
             <button className="authorize-button" type="submit" disabled={!canAuthorize} aria-busy={busy}>
@@ -377,14 +447,20 @@ export default function App() {
             <div className="rail-node" data-state={node.state} key={node.label}>
               <i aria-hidden="true" />
               <strong>{node.label}</strong>
-              <small>{node.note ?? (node.state === 'complete' ? 'Complete' : node.state === 'active' ? 'Current' : node.state === 'locked' ? 'Locked' : 'Waiting')}</small>
+              <small>{node.note ?? (node.state === 'complete' ? 'Complete' : node.state === 'active' ? 'Current' : node.state === 'unverified' ? 'Unverified' : node.state === 'locked' ? 'Locked' : 'Waiting')}</small>
             </div>
           ))}
         </div>
 
+        {midnight.networkId && midnight.networkId !== MIDNIGHT_NETWORK_ID && (
+          <div className="handoff-note evidence-unavailable">
+            <strong>Midnight network mismatch.</strong> The connected wallet reports {midnight.networkId}. VIA testnet is Cardano Preprod ↔ Midnight Preview, so Pre-Prod DUST cannot be counted as execution capacity for this route.
+          </div>
+        )}
+
         {deliveryEvidence.status === 'verified' && deliveryEvidence.snapshot && (
           <div className="handoff-note evidence-verified">
-            <strong>{destinationName} arrival verified.</strong> Connected wallet USDM moved from {formatBalance(deliveryEvidence.snapshot.baseline)} to {formatBalance(deliveryEvidence.verifiedBalance)}. Expected threshold: {formatBalance(deliveryEvidence.snapshot.target)} USDM.
+            <strong>{destinationName} arrival verified.</strong> Connected wallet USDM moved from {formatBalance(deliveryEvidence.snapshot.baseline)} to {formatBalance(deliveryEvidence.verifiedBalance)}. Expected threshold: {formatBalance(deliveryEvidence.snapshot.target)} USDM. This proves destination arrival, not VIA attribution.
           </div>
         )}
 
@@ -414,8 +490,12 @@ export default function App() {
           <dl>
             <div><dt>Direction</dt><dd>{sourceName} → VIA → {destinationName}</dd></div>
             <div><dt>Source wallet standard</dt><dd>{direction === 'cardano-to-midnight' ? 'CIP-30' : 'Midnight Connector API v4'}</dd></div>
+            <div><dt>Midnight wallet network</dt><dd><code>{midnight.networkId ?? 'not validated'}</code></dd></div>
+            <div><dt>Required Midnight network</dt><dd><code>{MIDNIGHT_NETWORK_ID}</code></dd></div>
             <div><dt>Proof execution</dt><dd>{direction === 'midnight-to-cardano' ? 'Wallet-local proving' : 'Not required on source leg'}</dd></div>
             <div><dt>Raw bridge phase</dt><dd><code>{activeStep}</code></dd></div>
+            <div><dt>Source finality evidence</dt><dd><code>{sourceFinalityEvidence.status}</code></dd></div>
+            <div><dt>VIA attribution evidence</dt><dd><code>{viaEvidence.status}</code></dd></div>
             <div><dt>Source address</dt><dd><code>{sourceAddress || 'not connected'}</code></dd></div>
             <div><dt>Destination</dt><dd><code>{recipient || 'not resolved'}</code></dd></div>
             <div><dt>Destination evidence</dt><dd><code>{deliveryEvidence.status}</code></dd></div>
