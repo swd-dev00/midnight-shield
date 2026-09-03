@@ -7,9 +7,22 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "contract:compile": "compact compile contracts/usdm-settlement.compact contracts/managed/usdm-settlement"
+    "contract:compile": "compact compile contracts/usdm-settlement.compact contracts/managed/usdm-settlement",
+    "contract:prepare-browser": "node scripts/prepare-compact-browser.mjs",
+    "contract:browser": "npm run contract:compile && npm run contract:prepare-browser",
+    "contract:integration-build": "npm run contract:browser && npm run build"
   },
   "dependencies": {
+    "@midnight-ntwrk/compact-runtime": "0.16.0",
+    "@midnight-ntwrk/dapp-connector-api": "4.0.1",
+    "@midnight-ntwrk/midnight-js-contracts": "4.1.1",
+    "@midnight-ntwrk/midnight-js-dapp-connector-proof-provider": "4.1.1",
+    "@midnight-ntwrk/midnight-js-fetch-zk-config-provider": "4.1.1",
+    "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "4.1.1",
+    "@midnight-ntwrk/midnight-js-network-id": "4.1.1",
+    "@midnight-ntwrk/midnight-js-protocol": "4.1.1",
+    "@midnight-ntwrk/midnight-js-types": "4.1.1",
+    "@midnight-ntwrk/midnight-js-utils": "4.1.1",
     "@via-labs-tech/usdm-bridge": "^1.2.0",
     "bech32": "^2.0.0",
     "react": "^19.2.8",
@@ -28,6 +41,8 @@
   "overrides": {
     "@cardano-sdk/crypto": {
       "npm": "npm:noop3@13.8.1"
-    }
+    },
+    "@midnight-ntwrk/ledger-v8": "8.1.0",
+    "@midnight-ntwrk/midnight-js-network-id": "4.1.1"
   }
 }
