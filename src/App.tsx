@@ -573,7 +573,7 @@ export default function App() {
             {deliveryEvidence.snapshot && <div><dt>Destination baseline / target</dt><dd><code>{formatBalance(deliveryEvidence.snapshot.baseline)} → {formatBalance(deliveryEvidence.snapshot.target)} USDM</code></dd></div>}
             {deliveryEvidence.verifiedBalance != null && <div><dt>Verified destination balance</dt><dd><code>{formatBalance(deliveryEvidence.verifiedBalance)} USDM</code></dd></div>}
             {direction === 'cardano-to-midnight' && <div><dt>Compact browser assets</dt><dd><code>{compactSettlement.compiledReady ? 'compiled/prepared' : 'stub locked'}</code></dd></div>}
-            {direction === 'cardano-to-midnight' && <div><dt>Compact settlement deployment</dt><dd><code>{compactSettlement.contractAddress ?? MIDNIGHT_SETTLEMENT_CONTRACT_ADDRESS || 'not deployed/configured'}</code></dd></div>}
+            {direction === 'cardano-to-midnight' && <div><dt>Compact settlement deployment</dt><dd><code>{compactSettlement.contractAddress || MIDNIGHT_SETTLEMENT_CONTRACT_ADDRESS || 'not deployed/configured'}</code></dd></div>}
             {direction === 'cardano-to-midnight' && <div><dt>Compact settlement status</dt><dd><code>{compactSettlement.status}</code></dd></div>}
             {direction === 'cardano-to-midnight' && <div><dt>Compact payee</dt><dd><code>{settlementRecipient || 'not resolved'}</code></dd></div>}
             {compactSettlement.execution && <div><dt>Compact settlement tx</dt><dd><code>{compactSettlement.execution.txId}</code></dd></div>}
