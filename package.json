@@ -1,0 +1,32 @@
+{
+  "name": "via-usdm-settlement-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@via-labs-tech/usdm-bridge": "^1.2.0",
+    "bech32": "^2.0.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-basic-ssl": "^2.2.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.0.0",
+    "vite-plugin-node-polyfills": "^0.25.0",
+    "vite-plugin-wasm": "^3.6.0"
+  },
+  "overrides": {
+    "@cardano-sdk/crypto": {
+      "npm": "npm:noop3@13.8.1"
+    }
+  }
+}
