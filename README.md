@@ -1,41 +1,78 @@
-# 🛡️ Midnight Shield
+# VIA USDM Settlement Studio
 
-> Privacy-preserving credential & state verification powered by Midnight & Compact.
+**Cross-chain settlement without cross-chain complexity.**
 
-[![Network: Preview/Preprod](https://img.shields.io/badge/Network-Preview%2FPreprod-blue)](https://docs.midnight.network)
-[![Built with Compact](https://img.shields.io/badge/Language-Compact-purple)](https://docs.midnight.network)
+VIA USDM Settlement Studio is an intent-driven browser interface for native USDM movement between Cardano and Midnight. It starts from VIA Labs' real `@via-labs-tech/usdm-bridge` browser path and adds the missing adoption layer: preflight checks, progressive abstraction, human-readable failure recovery, and an inspectable execution trace.
 
----
+> **VIA makes cross-chain messaging possible. Settlement Studio makes operating it disappear.**
 
-## Product Idea
+## What this branch implements
 
-**Midnight Shield** is a privacy-first verification protocol built on the Midnight network using Compact smart contracts. It enables users to generate zero-knowledge proofs of local, off-chain witness data—such as identity attributes, access credentials, or threshold balances—without ever exposing raw sensitive information to the public ledger. By decoupling private witness execution from on-chain public state updates, Midnight Shield delivers seamless compliance and verification while protecting user privacy by default.
+- Cardano CIP-30 wallet discovery and connection
+- Midnight Connector API v4 discovery and connection
+- Live Cardano ADA + USDM wallet balances
+- Live Midnight USDM + DUST capacity
+- Cardano → Midnight `bridgeUSDM()` execution
+- Midnight → Cardano `bridgeUSDM()` execution with wallet-local proving
+- Real bridge phase streaming in the UI
+- Intent-driven Simple / Advanced / Trace modes
+- Blocking preflight for wallet, destination, USDM balance, and fee/execution capacity
+- Human-readable error translation with raw errors retained in Trace mode
+- Source-chain evidence links and VIA Scan access
+- Explicit distinction between **source acceptance** and **destination delivery**
 
----
+## Why the distinction matters
 
-## Public State vs. Private Witness
+The current bridge hook confirms the source-side operation. It does not expose enough destination evidence for this UI to honestly claim that VIA delivery and destination settlement are already complete. The Intent Rail therefore marks the final VIA stage as a handoff after source acceptance rather than manufacturing a green checkmark.
 
-In Compact smart contracts on Midnight, data handling is explicitly separated into **Public State** and **Private Witness**:
+That is deliberate: **abstraction should remove cognitive burden, not remove truth.**
 
-- **Public State:** Data that is permanently recorded on-chain and visible to all network participants. This includes ledger variables, contract balances, public keys, and current state roots. It represents the shared ground truth verified by consensus nodes.
-- **Private Witness:** Data that remains strictly off-chain on the user's local machine or client runtime. It comprises secret inputs, private keys, raw identity attributes, or pre-images required to generate zero-knowledge proofs. The contract logic operates on private witnesses locally to produce zk-proofs without ever revealing the raw underlying values to the public ledger.
-
----
-
-## Local Setup & Installation
-
-### Prerequisites
-
-- **Node.js** (v18 or higher)
-- **npm** / **yarn** / **pnpm**
-- **Compact Compiler Toolchain** installed and configured in your system path (`compact compile --version`)
-
-### 1. Installation
-
-Clone the repository and install project dependencies:
+## Local run
 
 ```bash
-git clone https://github.com/swd-dev00/midnight-shield.git
-cd midnight-shield
 npm install
+npm run dev
 ```
+
+Wallet extensions require a secure context. The Vite configuration uses a local HTTPS dev server for extension testing.
+
+Optional Cardano provider:
+
+```bash
+cp .env.example .env
+# add VITE_BLOCKFROST_PREPROD if desired
+```
+
+Without a Blockfrost key, the dev server can proxy applicable Cardano reads through Koios, following VIA's demo configuration pattern.
+
+## Product modes
+
+### Simple
+The user sees the economic action: source, amount, destination, authorize.
+
+### Advanced
+Adds local intent metadata and a manual destination override without exposing bridge-package internals.
+
+### Trace
+Exposes wallet standard, proving behavior, raw bridge phase, addresses, source transaction identifiers, explorer access, and raw error evidence.
+
+## Security posture
+
+- No mnemonic or seed phrase input.
+- Cardano authorization remains inside the CIP-30 wallet.
+- Midnight proving remains inside the connector-v4 wallet.
+- No fake DUST sponsorship claim.
+- No fake destination-settlement claim.
+- The local intent label is explicitly not presented as on-chain metadata.
+
+## Next competition layer
+
+The transfer abstraction is the first production slice. The next layer is a Compact settlement module that consumes the arrived USDM for a real application action, followed by destination-state verification so the final rail node can be proven rather than inferred.
+
+## Design system
+
+See [`DESIGN.md`](./DESIGN.md). The visual thesis is **precision instrument, not crypto casino**. Gold is reserved for user intent and authorization; signal cyan is reserved for verified infrastructure state.
+
+## Network
+
+Competition demo target: **Cardano Preprod ↔ Midnight Preview**.
