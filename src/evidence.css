@@ -2,6 +2,25 @@
   grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
 }
 
+.rail-node[data-state="unverified"] {
+  opacity: .82;
+}
+
+.rail-node[data-state="unverified"] i {
+  border-style: dashed;
+  border-color: rgba(215,181,109,.72);
+  background: rgba(215,181,109,.08);
+  box-shadow: none;
+}
+
+.rail-node[data-state="unverified"] strong {
+  color: var(--gold);
+}
+
+.rail-node[data-state="unverified"] small {
+  color: #aa966a;
+}
+
 .rail-node[data-state="locked"] {
   opacity: .52;
 }
