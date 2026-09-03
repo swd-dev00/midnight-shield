@@ -1,0 +1,40 @@
+name: VIA Settlement Studio Build
+
+on:
+  push:
+    branches:
+      - via-settlement-studio
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck and build frontend
+        run: npm run build
+
+      - name: Install Compact devtools and ledger-8 toolchain
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/midnightntwrk/compact/releases/download/compact-v0.5.2/compact-installer.sh | sh
+          source "$HOME/.local/bin/env"
+          compact update 0.31
+          compact compile --version
+          npm run contract:compile

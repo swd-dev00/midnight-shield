@@ -1,0 +1,68 @@
+pragma language_version 0.23;
+import CompactStandardLibrary;
+
+/**
+ * VIA USDM Settlement Studio — atomic Midnight settlement module.
+ *
+ * The contract does not call the VIA USDM gateway. Midnight ledger 8 has no
+ * ordinary contract-to-contract calls. Instead, the caller first receives
+ * bridged USDM in their Midnight wallet, then this circuit consumes that
+ * unshielded USDM from the transaction, routes it to the payee, and records
+ * a public settlement receipt.
+ *
+ * USDM on the current VIA route is unshielded, so amount and recipient are
+ * public by construction. Only a memo hash is stored; the memo itself stays
+ * off-chain.
+ */
+
+/** Immutable token color accepted by this deployment. */
+export sealed ledger usdmColor: Bytes<32>;
+
+/** Public, queryable receipt fields keyed by a caller-supplied unique ID. */
+export ledger settlementAmounts: Map<Bytes<32>, Uint<128>>;
+export ledger settlementRecipients: Map<Bytes<32>, UserAddress>;
+export ledger settlementMemoHashes: Map<Bytes<32>, Bytes<32>>;
+export ledger settlementCount: Counter;
+
+constructor(_usdmColor: Bytes<32>) {
+    usdmColor = disclose(_usdmColor);
+}
+
+/**
+ * Atomically settle USDM to a payee and persist a receipt.
+ *
+ * `settlementId` must be unique for this contract deployment.
+ * `amount` is expressed in USDM base units (USDM uses 6 decimals).
+ * `memoHash` is a 32-byte commitment generated off-chain; no raw memo is
+ * written to the public ledger.
+ */
+export circuit settle(
+    settlementId: Bytes<32>,
+    amount: Uint<128>,
+    recipient: UserAddress,
+    memoHash: Bytes<32>
+): [] {
+    const publicId = disclose(settlementId);
+    const publicAmount = disclose(amount);
+    const publicRecipient = disclose(recipient);
+    const publicMemoHash = disclose(memoHash);
+
+    assert(publicAmount > 0, "Settlement amount must be greater than zero");
+    assert(!settlementAmounts.member(publicId), "Settlement ID already used");
+
+    // Claim the caller-provided USDM into this contract transaction.
+    receiveUnshielded(usdmColor, publicAmount);
+
+    // Route the same USDM amount to the payee in the same transaction.
+    sendUnshielded(
+        usdmColor,
+        publicAmount,
+        right<ContractAddress, UserAddress>(publicRecipient)
+    );
+
+    // Persist an inspectable settlement receipt.
+    settlementAmounts.insert(publicId, publicAmount);
+    settlementRecipients.insert(publicId, publicRecipient);
+    settlementMemoHashes.insert(publicId, publicMemoHash);
+    settlementCount.increment(1);
+}
