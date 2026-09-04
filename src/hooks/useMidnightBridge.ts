@@ -8,12 +8,19 @@ export type MidnightZkAssetsStatus = 'checking' | 'ready' | 'missing'
 type MidnightZkAssetsManifest = {
   package: string
   version: string
+  network: string
+  source: string
   route: string
   fileCount: number
   files?: string[]
 }
 
 const MIDNIGHT_ZK_MANIFEST = '/artifacts/midnight/.via-assets-ready.json'
+const EXPECTED_VIA_PACKAGE = '@via-labs-tech/usdm-bridge'
+const EXPECTED_VIA_VERSION = '1.2.0'
+const EXPECTED_NETWORK = 'preview'
+const EXPECTED_SOURCE = 'artifacts/midnight/preview'
+const EXPECTED_ROUTE = '/artifacts/midnight'
 
 export function useMidnightBridge(wallet: string | null) {
   const [step, setStep] = useState<MidnightBridgeStep>('idle')
@@ -29,12 +36,16 @@ export function useMidnightBridge(wallet: string | null) {
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const manifest = await response.json() as MidnightZkAssetsManifest
       if (
-        manifest.package !== '@via-labs-tech/usdm-bridge' ||
-        manifest.route !== '/artifacts/midnight' ||
+        manifest.package !== EXPECTED_VIA_PACKAGE ||
+        manifest.version !== EXPECTED_VIA_VERSION ||
+        manifest.network !== EXPECTED_NETWORK ||
+        manifest.source !== EXPECTED_SOURCE ||
+        manifest.route !== EXPECTED_ROUTE ||
         !Number.isFinite(manifest.fileCount) ||
-        manifest.fileCount <= 0
+        manifest.fileCount <= 0 ||
+        manifest.files?.some((file) => file === 'preview' || file.startsWith('preview/'))
       ) {
-        throw new Error('Invalid VIA ZK asset manifest')
+        throw new Error('Invalid VIA Preview ZK asset manifest')
       }
       setZkAssetsManifest(manifest)
       setZkAssetsStatus('ready')
@@ -58,7 +69,7 @@ export function useMidnightBridge(wallet: string | null) {
       const assetsReady = await checkZkAssets()
       if (!assetsReady) {
         throw new Error(
-          'MIDNIGHT_ZK_ASSETS_MISSING: Browser proving requires VIA ZK assets at /artifacts/midnight.',
+          'MIDNIGHT_ZK_ASSETS_MISSING: Browser proving requires VIA Preview ZK assets directly at /artifacts/midnight.',
         )
       }
 
