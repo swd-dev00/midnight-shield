@@ -9,7 +9,25 @@ const expectedPackage = '@via-labs-tech/usdm-bridge'
 const expectedVersion = '1.2.0'
 const expectedRoute = '/artifacts/midnight'
 
-const bridgePackageJson = require('@via-labs-tech/usdm-bridge/package.json')
+async function findPackageJson(entry) {
+  let current = path.dirname(entry)
+  while (true) {
+    const candidate = path.join(current, 'package.json')
+    try {
+      const pkg = JSON.parse(await readFile(candidate, 'utf8'))
+      if (pkg.name === expectedPackage) return { path: candidate, pkg }
+    } catch {
+      // Continue walking upward until the package root is found.
+    }
+    const parent = path.dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+  throw new Error(`Unable to locate ${expectedPackage} package.json from installed entry point`)
+}
+
+const bridgeEntry = require.resolve(expectedPackage)
+const { pkg: bridgePackageJson } = await findPackageJson(bridgeEntry)
 if (bridgePackageJson.version !== expectedVersion) {
   throw new Error(`Expected ${expectedPackage}@${expectedVersion}, found ${bridgePackageJson.version}`)
 }
