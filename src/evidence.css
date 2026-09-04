@@ -1,0 +1,64 @@
+.intent-rail {
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+}
+
+.rail-node[data-state="unverified"] {
+  opacity: .82;
+}
+
+.rail-node[data-state="unverified"] i {
+  border-style: dashed;
+  border-color: rgba(215,181,109,.72);
+  background: rgba(215,181,109,.08);
+  box-shadow: none;
+}
+
+.rail-node[data-state="unverified"] strong {
+  color: var(--gold);
+}
+
+.rail-node[data-state="unverified"] small {
+  color: #aa966a;
+}
+
+.rail-node[data-state="locked"] {
+  opacity: .52;
+}
+
+.rail-node[data-state="locked"] i {
+  border-style: dashed;
+  border-color: #4b4f58;
+  background: #0d0f12;
+}
+
+.rail-node[data-state="locked"] strong {
+  color: #707681;
+}
+
+.rail-node[data-state="locked"] small {
+  color: #626872;
+}
+
+.handoff-note.evidence-verified {
+  border-color: rgba(108,217,209,.38);
+  background: linear-gradient(90deg, rgba(108,217,209,.07), transparent 72%), #0e1014;
+}
+
+.handoff-note.evidence-verified strong {
+  color: var(--signal);
+}
+
+.handoff-note.evidence-unavailable {
+  border-color: rgba(215,181,109,.28);
+  background: linear-gradient(90deg, rgba(215,181,109,.055), transparent 72%), #0e1014;
+}
+
+.handoff-note.evidence-unavailable strong {
+  color: var(--gold);
+}
+
+@media (max-width: 760px) {
+  .intent-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
