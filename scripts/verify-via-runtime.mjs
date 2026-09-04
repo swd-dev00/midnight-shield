@@ -7,6 +7,8 @@ const require = createRequire(import.meta.url)
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const expectedPackage = '@via-labs-tech/usdm-bridge'
 const expectedVersion = '1.2.0'
+const expectedNetwork = 'preview'
+const expectedSource = 'artifacts/midnight/preview'
 const expectedRoute = '/artifacts/midnight'
 
 async function findPackageJson(entry) {
@@ -50,8 +52,19 @@ async function verifyTree(label, base) {
 
   if (manifest.package !== expectedPackage) throw new Error(`${label}: unexpected package ${manifest.package}`)
   if (manifest.version !== expectedVersion) throw new Error(`${label}: unexpected VIA version ${manifest.version}`)
+  if (manifest.network !== expectedNetwork) throw new Error(`${label}: unexpected Midnight network ${manifest.network}`)
+  if (manifest.source !== expectedSource) throw new Error(`${label}: unexpected source tree ${manifest.source}`)
   if (manifest.route !== expectedRoute) throw new Error(`${label}: unexpected runtime route ${manifest.route}`)
   if (!Number.isFinite(manifest.fileCount) || manifest.fileCount <= 0) throw new Error(`${label}: manifest reports no proving assets`)
+
+  try {
+    await access(path.join(base, expectedNetwork))
+    throw new Error(
+      `${label}: nested ${expectedRoute}/${expectedNetwork} directory detected; Preview assets must be served directly at ${expectedRoute}`,
+    )
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('nested')) throw error
+  }
 
   const actualCount = await countFiles(base)
   if (actualCount <= 0) throw new Error(`${label}: proving asset tree is empty`)
@@ -62,11 +75,11 @@ async function verifyTree(label, base) {
   const size = (await stat(manifestPath)).size
   if (size <= 2) throw new Error(`${label}: manifest is empty`)
 
-  console.log(`✓ ${label}: ${actualCount} VIA Midnight proving assets for ${expectedPackage}@${expectedVersion}`)
+  console.log(`✓ ${label}: ${actualCount} VIA Midnight ${expectedNetwork} proving assets for ${expectedPackage}@${expectedVersion}`)
 }
 
 await verifyTree('public runtime tree', path.join(root, 'public', 'artifacts', 'midnight'))
 await verifyTree('production dist tree', path.join(root, 'dist', 'artifacts', 'midnight'))
 
-console.log(`✓ browser runtime route ready: ${expectedRoute}`)
-console.log('NOTE: this proves asset availability only. Competition readiness still requires a real Connector-v4 Midnight → Cardano proof in-browser.')
+console.log(`✓ browser runtime route ready: ${expectedRoute} (${expectedNetwork})`)
+console.log('NOTE: this proves asset routing only. Competition readiness still requires a real Connector-v4 Midnight → Cardano proof in-browser.')
