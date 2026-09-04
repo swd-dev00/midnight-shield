@@ -20,4 +20,13 @@ export const NOT_CARDANO = /1am|midnight|mnlace/i
 export const cardanoExplorerTxUrl = (txHash: string): string =>
   `https://preprod.cardanoscan.io/transaction/${txHash}`
 
-export const viaScanUrl = 'https://scan.vialabs.tech'
+const VIA_SCAN = 'https://scan.vialabs.tech'
+
+/** VIA Scan expects Midnight-source hashes with 0x and Cardano-source hashes bare. */
+export const viaScanTxUrl = (txHash: string, source: 'cardano' | 'midnight'): string => {
+  const bare = txHash.startsWith('0x') ? txHash.slice(2) : txHash
+  const normalized = source === 'midnight' ? `0x${bare}` : bare
+  return `${VIA_SCAN}/tx/${normalized}`
+}
+
+export const viaScanUrl = VIA_SCAN
