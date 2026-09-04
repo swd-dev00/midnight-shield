@@ -8,6 +8,12 @@ export function explainBridgeError(raw: string): FriendlyError {
   const message = raw || 'Unknown bridge error'
   const value = message.toLowerCase()
 
+  if (value.includes('midnight_zk_assets_missing') || (value.includes('zk assets') && value.includes('/artifacts/midnight'))) return {
+    title: 'Midnight proving assets are not available',
+    guidance: 'The reverse leg has been blocked before wallet proving. VIA browser proving requires the bundled Midnight ZK assets to be served at /artifacts/midnight. Rebuild or redeploy the frontend with the VIA artifact-copy step intact, then retry.',
+    technical: message,
+  }
+
   if (value.includes('network mismatch') || (value.includes('preview') && value.includes('preprod'))) return {
     title: 'Midnight is on the wrong test network',
     guidance: 'VIA testnet pairs Cardano Preprod with Midnight Preview. Switch the Midnight wallet to Preview, let it sync, then reconnect. DUST generated on Midnight Pre-Prod cannot fund the Preview leg.',
