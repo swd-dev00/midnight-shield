@@ -1,6 +1,7 @@
 name: VIA Settlement Studio Build
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -14,6 +15,7 @@ permissions:
 
 jobs:
   frontend:
+    name: Frontend build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,32 +33,75 @@ jobs:
         run: npm run build
 
   compact:
+    name: Compact 0.31.1 compile
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Install Compact devtools and ledger-8 toolchain
+      - name: Record runner CPU capabilities
         shell: bash
         run: |
+          set -euo pipefail
+          echo "Architecture: $(uname -m)"
+          lscpu | grep -E 'Architecture|Vendor ID|Model name' || true
+          echo "Relevant CPU flags:"
+          grep -m1 '^flags' /proc/cpuinfo | tr ' ' '\n' | grep -E '^(adx|avx|avx2|bmi|bmi2)$' | sort || true
+
+      - name: Install Compact devtools and 0.31 toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
           curl --proto '=https' --tlsv1.2 -LsSf \
             https://github.com/midnightntwrk/compact/releases/download/compact-v0.5.2/compact-installer.sh | sh
-          source "$HOME/.local/bin/env"
-          compact update 0.31
-          compact compile --version
-          npm run contract:compile
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/compact" update 0.31
+          test "$("$HOME/.local/bin/compact" compile --version)" = "0.31.1"
+
+      - name: Smoke-test ZKIR
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/zkir-smoke.compact <<'EOF'
+          pragma language_version 0.23;
+          import CompactStandardLibrary;
+
+          export ledger count: Counter;
+
+          export circuit increment(): [] {
+              count.increment(1);
+          }
+          EOF
+          rm -rf /tmp/zkir-smoke-managed
+          mkdir -p /tmp/zkir-smoke-managed
+          compact compile /tmp/zkir-smoke.compact /tmp/zkir-smoke-managed
+
+      - name: Compile settlement contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf contracts/managed/usdm-settlement
+          mkdir -p contracts/managed
+          compact compile \
+            contracts/usdm-settlement.compact \
+            contracts/managed/usdm-settlement
+          test -f contracts/managed/usdm-settlement/contract/index.js
+          find contracts/managed/usdm-settlement -maxdepth 4 -type f | sort
+
+      - name: Upload compiled Compact artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: compact-usdm-settlement
+          path: contracts/managed/usdm-settlement
+          if-no-files-found: error
+          retention-days: 7
 
   browser-integration:
+    name: Browser integration build
     runs-on: ubuntu-latest
-    needs: [frontend, compact]
+    needs:
+      - frontend
+      - compact
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,17 +114,22 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Install Compact devtools and ledger-8 toolchain
-        shell: bash
-        run: |
-          curl --proto '=https' --tlsv1.2 -LsSf \
-            https://github.com/midnightntwrk/compact/releases/download/compact-v0.5.2/compact-installer.sh | sh
-          source "$HOME/.local/bin/env"
-          compact update 0.31
-          compact compile --version
+      - name: Download compiled Compact artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: compact-usdm-settlement
+          path: contracts/managed/usdm-settlement
 
-      - name: Compile contract, generate browser adapter, and build app
+      - name: Verify compiled contract artifact
         shell: bash
         run: |
-          source "$HOME/.local/bin/env"
-          npm run contract:integration-build
+          set -euo pipefail
+          test -f contracts/managed/usdm-settlement/contract/index.js
+          find contracts/managed/usdm-settlement -maxdepth 4 -type f | sort
+
+      - name: Generate browser adapter and build app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run contract:prepare-browser
+          npm run build
