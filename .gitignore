@@ -1,5 +1,6 @@
 node_modules
 dist
+public/artifacts/midnight
 .env
 .env.local
 .DS_Store
