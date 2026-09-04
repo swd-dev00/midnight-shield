@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "verify:via-runtime": "node scripts/verify-via-runtime.mjs",
+    "verify:linux": "bash scripts/verify-linux.sh",
     "contract:compile": "compact compile contracts/usdm-settlement.compact contracts/managed/usdm-settlement",
     "contract:prepare-browser": "node scripts/prepare-compact-browser.mjs",
     "contract:browser": "npm run contract:compile && npm run contract:prepare-browser",
