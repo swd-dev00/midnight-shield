@@ -4,11 +4,79 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 import wasm from 'vite-plugin-wasm'
 import topLevelAwait from 'vite-plugin-top-level-await'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
+import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
-const bridgeNodeModules = path.resolve(path.dirname(require.resolve('@via-labs-tech/usdm-bridge')), '../node_modules')
+const bridgeEntry = require.resolve('@via-labs-tech/usdm-bridge')
+const bridgeNodeModules = path.resolve(path.dirname(bridgeEntry), '../node_modules')
+
+function findPackageRoot(entry: string): string {
+  let current = path.dirname(entry)
+  while (true) {
+    const candidate = path.join(current, 'package.json')
+    if (fs.existsSync(candidate)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(candidate, 'utf8')) as { name?: string }
+        if (pkg.name === '@via-labs-tech/usdm-bridge') return current
+      } catch {
+        // Continue walking upward until the bridge package root is found.
+      }
+    }
+    const parent = path.dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+  throw new Error('Unable to locate @via-labs-tech/usdm-bridge package root')
+}
+
+function listFilesRecursive(root: string): string[] {
+  const files: string[] = []
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const absolute = path.join(root, entry.name)
+    if (entry.isDirectory()) files.push(...listFilesRecursive(absolute))
+    else files.push(absolute)
+  }
+  return files
+}
+
+const bridgePackageRoot = findPackageRoot(bridgeEntry)
+const bridgePackageJson = JSON.parse(fs.readFileSync(path.join(bridgePackageRoot, 'package.json'), 'utf8')) as { version?: string }
+
+function prepareMidnightZkAssets() {
+  const source = path.join(bridgePackageRoot, 'artifacts', 'midnight')
+  const destination = path.resolve(process.cwd(), 'public', 'artifacts', 'midnight')
+
+  if (!fs.existsSync(source)) {
+    throw new Error(
+      'VIA Midnight ZK assets are missing from @via-labs-tech/usdm-bridge. Browser Midnight → Cardano proving cannot run.',
+    )
+  }
+
+  fs.rmSync(destination, { recursive: true, force: true })
+  fs.mkdirSync(destination, { recursive: true })
+  fs.cpSync(source, destination, { recursive: true })
+
+  const copiedFiles = listFilesRecursive(destination)
+    .map((file) => path.relative(destination, file).replaceAll('\\', '/'))
+    .filter((file) => !file.endsWith('.via-assets-ready.json'))
+
+  if (copiedFiles.length === 0) {
+    throw new Error('VIA Midnight ZK artifact directory is empty; refusing to build a reverse-leg browser flow.')
+  }
+
+  fs.writeFileSync(
+    path.join(destination, '.via-assets-ready.json'),
+    JSON.stringify({
+      package: '@via-labs-tech/usdm-bridge',
+      version: bridgePackageJson.version ?? 'unknown',
+      route: '/artifacts/midnight',
+      fileCount: copiedFiles.length,
+      files: copiedFiles,
+    }, null, 2),
+  )
+}
 
 export default defineConfig(({ mode }) => ({
   define: {
@@ -21,6 +89,12 @@ export default defineConfig(({ mode }) => ({
     global: 'globalThis',
   },
   plugins: [
+    {
+      name: 'via-midnight-zk-assets',
+      configResolved() {
+        prepareMidnightZkAssets()
+      },
+    },
     {
       name: 'shim-resolver',
       enforce: 'pre',
