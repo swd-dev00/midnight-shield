@@ -82,6 +82,28 @@ The Midnight connector reads `getConfiguration().networkId` after connection and
 - Destination balance evidence that cannot turn the VIA node green
 - Manual-recipient evidence boundary
 
+### VIA v1.2.0 browser proving runtime
+
+The sprint build pins `@via-labs-tech/usdm-bridge` to **1.2.0** for reproducibility.
+
+VIA's browser guide requires the package's bundled Midnight ZK assets to be served at:
+
+```text
+/artifacts/midnight
+```
+
+Settlement Studio now treats that as a P0 runtime invariant:
+
+- Vite locates the installed bridge package's `artifacts/midnight` tree.
+- The tree is copied into `public/artifacts/midnight` before dev/build startup.
+- Startup fails if the package artifact directory is missing or empty.
+- A generated `.via-assets-ready.json` manifest records package version, route, file count, and copied paths.
+- The Midnight → Cardano hook checks that manifest in-browser immediately before calling `bridgeUSDM()`.
+- Missing assets block the reverse leg **before** wallet-local proving and surface a targeted recovery message.
+- Generated proving assets remain sourced from the pinned package and are ignored by Git rather than duplicated as repository binaries.
+
+A successful TypeScript/Vite build alone is therefore **not** represented as proof that the reverse browser route works. Competition readiness still requires a real Midnight → Cardano wallet-local proof in-browser.
+
 ### Compact application layer
 
 - `contracts/usdm-settlement.compact`
@@ -105,7 +127,7 @@ npm install
 npm run dev
 ```
 
-Wallet extensions require a secure context. The Vite configuration uses a local HTTPS dev server for extension testing.
+Wallet extensions require a secure context. The Vite configuration uses a local HTTPS dev server for extension testing. Vite also prepares VIA's bundled Midnight proving assets at `/artifacts/midnight` during startup.
 
 Optional Cardano provider:
 
@@ -146,6 +168,7 @@ Exposes wallet standard, Midnight network ID, proving behavior, raw bridge phase
 - Cardano authorization remains inside the CIP-30 wallet.
 - Midnight bridge proving remains inside the connector-v4 wallet.
 - Midnight network identity is validated before the connector is treated as usable.
+- Reverse-leg proving is blocked if `/artifacts/midnight` fails runtime verification.
 - No fake DUST sponsorship claim.
 - No fake VIA-attribution claim.
 - No fake destination-settlement claim.
@@ -157,16 +180,20 @@ Exposes wallet standard, Midnight network ID, proving behavior, raw bridge phase
 
 ## Verification
 
-The repository workflow checks the two build surfaces independently:
+The repository verification ladder keeps separate claims separate:
 
 ```text
-frontend: TypeScript + Vite production build
-compact:  Compact 0.31 toolchain + usdm-settlement.compact compilation
+frontend:            TypeScript + Vite production build
+VIA browser runtime: /artifacts/midnight manifest + real reverse-leg wallet proof
+compact:             Compact 0.31 source compilation
+browser integration: generated Compact adapter + frontend integration build
+settlement:          finalized real Compact call on Midnight Preview
+receipt:             independent public contract-state lookup
 ```
 
-The jobs are separated so a frontend result is not misrepresented as Compact verification, or vice versa.
+The jobs/evidence surfaces are separated so one result cannot be represented as proof of another.
 
-Generated proving assets and a Preview deployment address are not fabricated or checked in before a real contract compilation/deployment produces them.
+Generated proving assets and a Preview deployment address are not fabricated or checked in before the real package/compiler/network produces them.
 
 ## Design system
 
