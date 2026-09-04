@@ -11,6 +11,8 @@ import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const bridgeEntry = require.resolve('@via-labs-tech/usdm-bridge')
 const bridgeNodeModules = path.resolve(path.dirname(bridgeEntry), '../node_modules')
+const VIA_MIDNIGHT_NETWORK = 'preview'
+const VIA_MIDNIGHT_RUNTIME_ROUTE = '/artifacts/midnight'
 
 function findPackageRoot(entry: string): string {
   let current = path.dirname(entry)
@@ -45,18 +47,26 @@ const bridgePackageRoot = findPackageRoot(bridgeEntry)
 const bridgePackageJson = JSON.parse(fs.readFileSync(path.join(bridgePackageRoot, 'package.json'), 'utf8')) as { version?: string }
 
 function prepareMidnightZkAssets() {
-  const source = path.join(bridgePackageRoot, 'artifacts', 'midnight')
+  // VIA's browser path expects the selected network's files directly at
+  // /artifacts/midnight — not /artifacts/midnight/preview.
+  const source = path.join(bridgePackageRoot, 'artifacts', 'midnight', VIA_MIDNIGHT_NETWORK)
   const destination = path.resolve(process.cwd(), 'public', 'artifacts', 'midnight')
 
   if (!fs.existsSync(source)) {
     throw new Error(
-      'VIA Midnight ZK assets are missing from @via-labs-tech/usdm-bridge. Browser Midnight → Cardano proving cannot run.',
+      `VIA Midnight ${VIA_MIDNIGHT_NETWORK} ZK assets are missing from @via-labs-tech/usdm-bridge. Browser Midnight → Cardano proving cannot run.`,
     )
   }
 
   fs.rmSync(destination, { recursive: true, force: true })
   fs.mkdirSync(destination, { recursive: true })
   fs.cpSync(source, destination, { recursive: true })
+
+  if (fs.existsSync(path.join(destination, VIA_MIDNIGHT_NETWORK))) {
+    throw new Error(
+      `VIA ZK runtime path is nested incorrectly. Expected ${VIA_MIDNIGHT_RUNTIME_ROUTE}/<asset>, not ${VIA_MIDNIGHT_RUNTIME_ROUTE}/${VIA_MIDNIGHT_NETWORK}/<asset>.`,
+    )
+  }
 
   const copiedFiles = listFilesRecursive(destination)
     .map((file) => path.relative(destination, file).replaceAll('\\', '/'))
@@ -71,7 +81,9 @@ function prepareMidnightZkAssets() {
     JSON.stringify({
       package: '@via-labs-tech/usdm-bridge',
       version: bridgePackageJson.version ?? 'unknown',
-      route: '/artifacts/midnight',
+      network: VIA_MIDNIGHT_NETWORK,
+      source: `artifacts/midnight/${VIA_MIDNIGHT_NETWORK}`,
+      route: VIA_MIDNIGHT_RUNTIME_ROUTE,
       fileCount: copiedFiles.length,
       files: copiedFiles,
     }, null, 2),
