@@ -3,8 +3,9 @@ import {
   MIDNIGHT_NETWORK_ID,
   MIDNIGHT_SETTLEMENT_CONTRACT_ADDRESS,
   NETWORK_LABEL,
+  cardanoExplorerAddressUrl,
   cardanoExplorerTxUrl,
-  viaScanUrl,
+  viaScanTxUrl,
 } from './config'
 import { explainBridgeError } from './lib/errors'
 import { useCardanoWallet } from './hooks/useCardanoWallet'
@@ -118,7 +119,9 @@ export default function App() {
   const activeStep = direction === 'cardano-to-midnight' ? cardanoBridge.step : midnightBridge.step
   const activeError = direction === 'cardano-to-midnight' ? cardanoBridge.error : midnightBridge.error
   const busy = activeStep !== 'idle' && activeStep !== 'done'
-  const canAuthorize = sourceWalletConnected && recipientReady && amountValid && balanceEnough && feeReady && !busy
+  const reverseZkReady = direction !== 'midnight-to-cardano' || midnightBridge.zkAssetsStatus === 'ready'
+  const reverseDestinationObserverReady = direction !== 'midnight-to-cardano' || cardanoBalance.balance?.releaseAware === true
+  const canAuthorize = sourceWalletConnected && recipientReady && amountValid && balanceEnough && feeReady && reverseZkReady && reverseDestinationObserverReady && !busy
   const sourceName = direction === 'cardano-to-midnight' ? 'Cardano' : 'Midnight'
   const destinationName = direction === 'cardano-to-midnight' ? 'Midnight' : 'Cardano'
   const sourceAddress = direction === 'cardano-to-midnight' ? cardano.address : midnight.address
@@ -129,7 +132,8 @@ export default function App() {
     destinationWalletConnected &&
     destinationConnectedAddress &&
     !manualRecipient &&
-    recipient.trim() === destinationConnectedAddress?.trim(),
+    recipient.trim() === destinationConnectedAddress?.trim() &&
+    reverseDestinationObserverReady,
   )
 
   const deliveryEvidence = useDeliveryEvidence(destinationBalance, refreshDestination)
@@ -144,6 +148,9 @@ export default function App() {
   const sourceTxHash = direction === 'cardano-to-midnight' ? cardanoBridge.txHash : midnightBridge.result?.txHash
   const sourceTxId = direction === 'midnight-to-cardano' ? midnightBridge.result?.txId : null
   const sourceAccepted = activeStep === 'done'
+  const sourceViaScanHref = sourceTxHash
+    ? viaScanTxUrl(sourceTxHash, direction === 'cardano-to-midnight' ? 'cardano' : 'midnight')
+    : null
 
   const sourceFinalityEvidence: EvidenceState<SourceFinalityEvidence> = sourceAccepted
     ? sourceTxHash
@@ -159,11 +166,11 @@ export default function App() {
       : unavailableEvidence('Source bridge completed without a transaction hash')
     : { status: busy ? 'pending' : 'idle' }
 
-  // The current browser bridge result exposes source-chain transaction output,
-  // but not an independently attributable VIA message/relay identifier.
-  // Destination balance movement is therefore never allowed to verify VIA delivery.
+  // A source hash gives us an exact VIA Scan correlation key, but a link is not
+  // the same thing as independently verified VIA delivery. Delivery remains a
+  // separate evidence state until VIA itself exposes/returns attributable state.
   const viaEvidence: EvidenceState<ViaDeliveryEvidence> = sourceAccepted
-    ? unavailableEvidence('Independently attributable VIA message evidence is not exposed by the current bridge result')
+    ? unavailableEvidence('Exact VIA Scan correlation is available, but delivery is not inferred from source or destination state')
     : { status: 'idle' }
 
   const rail = useMemo<RailNode[]>(() => {
@@ -217,9 +224,13 @@ export default function App() {
     const arrivalNote = arrivalVerified
       ? `+${formatBalance(deliveryEvidence.snapshot?.expectedDelta)} USDM observed`
       : evidenceUnavailable
-        ? 'Connected destination required for balance proof'
+        ? direction === 'midnight-to-cardano' && !reverseDestinationObserverReady
+          ? 'Enterprise-address-aware Cardano observer unavailable'
+          : 'Connected destination required for balance proof'
         : sourceAccepted
-          ? 'Watching destination wallet balance'
+          ? direction === 'midnight-to-cardano'
+            ? 'Watching Cardano wallet + VIA release address'
+            : 'Watching destination wallet balance'
           : undefined
 
     if (!c2m) {
@@ -228,7 +239,11 @@ export default function App() {
         {
           label: 'VIA release',
           state: viaState,
-          note: sourceAccepted ? 'Arrival evidence cannot independently attribute the VIA release' : undefined,
+          note: sourceAccepted
+            ? sourceViaScanHref
+              ? 'Exact VIA Scan correlation available; delivery not inferred'
+              : 'Awaiting independently attributable VIA evidence'
+            : undefined,
         },
         { label: 'Cardano arrival', state: arrivalState, note: arrivalNote },
       ]
@@ -265,7 +280,11 @@ export default function App() {
       {
         label: 'VIA delivery',
         state: viaState,
-        note: sourceAccepted ? 'Awaiting independently attributable VIA message evidence' : undefined,
+        note: sourceAccepted
+          ? sourceViaScanHref
+            ? 'Exact VIA Scan correlation available; delivery remains separate evidence'
+            : 'Awaiting independently attributable VIA message evidence'
+          : undefined,
       },
       { label: 'Midnight arrival', state: arrivalState, note: arrivalNote },
       {
@@ -290,20 +309,24 @@ export default function App() {
     deliveryEvidence.status,
     direction,
     midnightNetworkReady,
+    reverseDestinationObserverReady,
     settlementConfigured,
     sourceAccepted,
     sourceFinalityEvidence,
+    sourceViaScanHref,
     viaEvidence,
   ])
 
   const executionStatus = compactSettlement.status === 'verified'
     ? 'Compact settlement finalized; receipt-state verification pending'
     : deliveryEvidence.status === 'verified'
-      ? `${destinationName} arrival verified; VIA attribution remains unverified`
+      ? `${destinationName} arrival verified; VIA attribution remains separate evidence`
       : deliveryEvidence.status === 'watching' || deliveryEvidence.status === 'armed'
-        ? `Source accepted — watching ${destinationName} USDM balance`
+        ? direction === 'midnight-to-cardano'
+          ? 'Source accepted — watching Cardano wallet + VIA release address'
+          : `Source accepted — watching ${destinationName} USDM balance`
         : deliveryEvidence.status === 'unavailable' && activeStep === 'done'
-          ? 'Source accepted — connected destination evidence unavailable'
+          ? 'Source accepted — destination evidence unavailable; transfer is not marked failed'
           : phaseCopy[activeStep]
 
   const submitIntent = async (event: FormEvent) => {
@@ -347,6 +370,16 @@ export default function App() {
     : midnight.networkId === MIDNIGHT_NETWORK_ID
       ? 'ready'
       : 'blocked'
+  const zkAssetsCheck: CheckState = midnightBridge.zkAssetsStatus === 'ready'
+    ? 'ready'
+    : midnightBridge.zkAssetsStatus === 'missing'
+      ? 'blocked'
+      : 'pending'
+  const cardanoReleaseObserverCheck: CheckState = !cardano.api || !cardanoBalance.balance
+    ? 'pending'
+    : cardanoBalance.balance.releaseAware
+      ? 'ready'
+      : 'blocked'
   const showMidnightNetworkCheck = direction === 'midnight-to-cardano' || !manualRecipient || midnight.networkId != null
   const compactBusy = compactSettlement.status === 'deploying' || compactSettlement.status === 'settling'
 
@@ -386,10 +419,17 @@ export default function App() {
             <div className="wallet-title"><span className="chain-dot cardano-dot" /><div><strong>Cardano</strong><small>CIP-30</small></div></div>
             <div className="wallet-value"><b>{formatBalance(cardanoBalance.balance?.usdm)}</b><span>USDM</span></div>
             <div className="wallet-meta"><span>{truncate(cardano.address)}</span><span>{cardanoBalance.balance ? `${formatBalance(cardanoBalance.balance.ada)} ADA` : 'Fee balance —'}</span></div>
+            {mode !== 'simple' && cardanoBalance.balance && (
+              <div className="wallet-meta">
+                <span>Wallet {formatBalance(cardanoBalance.balance.baseUsdm)} USDM</span>
+                <span>VIA release {formatBalance(cardanoBalance.balance.enterpriseUsdm)} USDM</span>
+              </div>
+            )}
             <div className="wallet-actions">
               {cardano.api ? <span className="connected-label">Connected · {cardano.name}</span> : cardano.wallets.length ? cardano.wallets.map((wallet) => (
                 <button type="button" key={wallet.name} onClick={() => cardano.connect(wallet)} disabled={cardano.connecting}>Connect {wallet.label}</button>
               )) : <span className="wallet-empty">No CIP-30 wallet detected</span>}
+              {cardano.api && cardanoBalance.balance && !cardanoBalance.balance.releaseAware && <span className="wallet-empty">VIA release-address observer unavailable</span>}
             </div>
           </article>
 
@@ -466,7 +506,9 @@ export default function App() {
               <Check state={sourceCheck} title={`${sourceName} source`} detail={sourceWalletConnected ? 'Wallet authority available' : `Connect a ${sourceName} wallet`} />
               <Check state={recipientCheck} title={`${destinationName} destination`} detail={recipientReady ? 'Destination resolved' : mode === 'simple' ? `Connect the ${destinationName} wallet` : 'Enter a valid destination address'} />
               {showMidnightNetworkCheck && <Check state={midnightNetworkCheck} title="Midnight Preview network" detail={midnight.networkId == null ? 'Connect Midnight wallet to validate Preview' : midnight.networkId === MIDNIGHT_NETWORK_ID ? 'Wallet network matches VIA testnet route' : `Wallet reports ${midnight.networkId}; VIA testnet requires ${MIDNIGHT_NETWORK_ID}`} />}
-              <Check state={amountCheck} title="USDM availability" detail={!amountValid ? 'Enter an amount greater than zero' : !sourceBalanceLoaded ? 'Reading wallet balance' : balanceEnough ? `${formatBalance(sourceBalance)} USDM available` : 'Amount exceeds the wallet balance'} />
+              {direction === 'midnight-to-cardano' && <Check state={zkAssetsCheck} title="Browser ZK assets" detail={midnightBridge.zkAssetsStatus === 'ready' ? `${midnightBridge.zkAssetsManifest?.fileCount ?? 'Verified'} Preview proving files served at /artifacts/midnight` : midnightBridge.zkAssetsStatus === 'missing' ? 'Required VIA Preview proving assets are missing from /artifacts/midnight' : 'Checking /artifacts/midnight runtime manifest'} />}
+              {direction === 'midnight-to-cardano' && <Check state={cardanoReleaseObserverCheck} title="Cardano release observer" detail={cardanoBalance.balance?.releaseAware ? `Base + enterprise release address ready (${truncate(cardanoBalance.balance.enterpriseAddress, 10, 8)})` : cardanoBalance.error ? 'VIA-aware Cardano UTxO read failed; arrival proof is blocked' : 'Preparing enterprise-address-aware Cardano balance evidence'} />}
+              <Check state={amountCheck} title="USDM availability" detail={!amountValid ? 'Enter an amount greater than zero' : !sourceBalanceLoaded ? 'Reading evidence-bearing balance' : balanceEnough ? `${formatBalance(sourceBalance)} USDM available` : 'Amount exceeds the verified spendable balance'} />
               <Check state={feeCheck} title={direction === 'cardano-to-midnight' ? 'Cardano fee balance' : 'Midnight execution capacity'} detail={sourceFeeBalance == null ? 'Reading fee capacity' : feeReady ? direction === 'cardano-to-midnight' ? 'ADA balance detected' : 'DUST capacity detected on Preview' : direction === 'cardano-to-midnight' ? 'Add ADA for network fees' : 'Add Preview DUST capacity before proving'} />
             </div>
 
@@ -503,19 +545,23 @@ export default function App() {
 
         {deliveryEvidence.status === 'verified' && deliveryEvidence.snapshot && (
           <div className="handoff-note evidence-verified">
-            <strong>{destinationName} arrival verified.</strong> Connected wallet USDM moved from {formatBalance(deliveryEvidence.snapshot.baseline)} to {formatBalance(deliveryEvidence.verifiedBalance)}. Expected threshold: {formatBalance(deliveryEvidence.snapshot.target)} USDM. This proves destination arrival, not VIA attribution.
+            <strong>{destinationName} arrival verified.</strong> {direction === 'midnight-to-cardano' ? 'Spendable Cardano USDM across the connected wallet and VIA enterprise release address' : 'Connected wallet USDM'} moved from {formatBalance(deliveryEvidence.snapshot.baseline)} to {formatBalance(deliveryEvidence.verifiedBalance)}. Expected threshold: {formatBalance(deliveryEvidence.snapshot.target)} USDM. This proves destination arrival, not VIA attribution.
           </div>
         )}
 
         {(deliveryEvidence.status === 'watching' || deliveryEvidence.status === 'armed') && deliveryEvidence.snapshot && (
           <div className="handoff-note">
-            <strong>Source accepted.</strong> Watching the connected {destinationName} wallet for +{formatBalance(deliveryEvidence.snapshot.expectedDelta)} USDM. The arrival node will not complete until that balance evidence appears.
+            <strong>Source accepted.</strong> Watching {direction === 'midnight-to-cardano' ? 'the connected Cardano wallet plus its derived VIA release address' : `the connected ${destinationName} wallet`} for +{formatBalance(deliveryEvidence.snapshot.expectedDelta)} USDM. A delayed VIA attestation stays pending here; it is not converted into a false failure.
           </div>
         )}
 
         {deliveryEvidence.status === 'unavailable' && activeStep === 'done' && (
           <div className="handoff-note evidence-unavailable">
-            <strong>Source accepted, destination not automatically proven.</strong> The destination is not the connected wallet, so balance-delta evidence cannot be attributed safely. Use VIA Scan or destination-chain evidence instead.
+            {direction === 'midnight-to-cardano' && !cardanoBalance.balance?.releaseAware ? (
+              <><strong>Source accepted, Cardano arrival not claimed.</strong> The enterprise-address-aware Cardano observer is unavailable, so this build refuses to infer release from the normal wallet balance. Use the exact VIA Scan correlation and Cardano explorer evidence instead.</>
+            ) : (
+              <><strong>Source accepted, destination not automatically proven.</strong> The destination is not the connected wallet, so balance-delta evidence cannot be attributed safely. Use VIA Scan or destination-chain evidence instead.</>
+            )}
           </div>
         )}
 
@@ -563,12 +609,19 @@ export default function App() {
             <div><dt>Source wallet standard</dt><dd>{direction === 'cardano-to-midnight' ? 'CIP-30' : 'Midnight Connector API v4'}</dd></div>
             <div><dt>Midnight wallet network</dt><dd><code>{midnight.networkId ?? 'not validated'}</code></dd></div>
             <div><dt>Required Midnight network</dt><dd><code>{MIDNIGHT_NETWORK_ID}</code></dd></div>
-            <div><dt>Proof execution</dt><dd>{direction === 'midnight-to-cardano' ? 'Wallet-local proving' : compactSettlement.status === 'settling' || compactSettlement.status === 'verified' ? 'Wallet-local Compact proving' : 'Not required on source leg'}</dd></div>
+            <div><dt>Proof execution</dt><dd>{direction === 'midnight-to-cardano' ? 'Wallet-local proving through Connector v4' : compactSettlement.status === 'settling' || compactSettlement.status === 'verified' ? 'Wallet-local Compact proving' : 'Not required on source leg'}</dd></div>
+            {direction === 'midnight-to-cardano' && <div><dt>VIA browser ZK assets</dt><dd><code>{midnightBridge.zkAssetsStatus} · /artifacts/midnight · {midnightBridge.zkAssetsManifest?.fileCount ?? 0} files</code></dd></div>}
             <div><dt>Raw bridge phase</dt><dd><code>{activeStep}</code></dd></div>
             <div><dt>Source finality evidence</dt><dd><code>{sourceFinalityEvidence.status}</code></dd></div>
             <div><dt>VIA attribution evidence</dt><dd><code>{viaEvidence.status}</code></dd></div>
             <div><dt>Source address</dt><dd><code>{sourceAddress || 'not connected'}</code></dd></div>
             <div><dt>Destination</dt><dd><code>{recipient || 'not resolved'}</code></dd></div>
+            {cardano.address && <div><dt>Cardano wallet address</dt><dd><code>{cardano.address}</code></dd></div>}
+            {cardanoBalance.balance?.enterpriseAddress && <div><dt>VIA Cardano release address</dt><dd><code>{cardanoBalance.balance.enterpriseAddress}</code></dd></div>}
+            {cardanoBalance.balance && <div><dt>Cardano wallet-visible USDM</dt><dd><code>{formatBalance(cardanoBalance.balance.baseUsdm)}</code></dd></div>}
+            {cardanoBalance.balance && <div><dt>Cardano enterprise-release USDM</dt><dd><code>{formatBalance(cardanoBalance.balance.enterpriseUsdm)}</code></dd></div>}
+            {cardanoBalance.balance && <div><dt>Cardano release observer</dt><dd><code>{cardanoBalance.balance.releaseAware ? 'verified query path ready' : 'unavailable'}</code></dd></div>}
+            {cardanoBalance.error && <div><dt>Cardano observer error</dt><dd><code>{cardanoBalance.error}</code></dd></div>}
             <div><dt>Destination evidence</dt><dd><code>{deliveryEvidence.status}</code></dd></div>
             {deliveryEvidence.snapshot && <div><dt>Destination baseline / target</dt><dd><code>{formatBalance(deliveryEvidence.snapshot.baseline)} → {formatBalance(deliveryEvidence.snapshot.target)} USDM</code></dd></div>}
             {deliveryEvidence.verifiedBalance != null && <div><dt>Verified destination balance</dt><dd><code>{formatBalance(deliveryEvidence.verifiedBalance)} USDM</code></dd></div>}
@@ -582,8 +635,9 @@ export default function App() {
             {sourceTxHash && <div><dt>Source tx hash</dt><dd><code>{sourceTxHash}</code></dd></div>}
           </dl>
           <div className="trace-actions">
-            {direction === 'cardano-to-midnight' && sourceTxHash && <a href={cardanoExplorerTxUrl(sourceTxHash)} target="_blank" rel="noreferrer">Open Cardano transaction ↗</a>}
-            <a href={viaScanUrl} target="_blank" rel="noreferrer">Open VIA Scan ↗</a>
+            {direction === 'cardano-to-midnight' && sourceTxHash && <a href={cardanoExplorerTxUrl(sourceTxHash)} target="_blank" rel="noreferrer">Open Cardano source transaction ↗</a>}
+            {cardanoBalance.balance?.enterpriseAddress && <a href={cardanoExplorerAddressUrl(cardanoBalance.balance.enterpriseAddress)} target="_blank" rel="noreferrer">Open VIA release address ↗</a>}
+            {sourceViaScanHref && <a href={sourceViaScanHref} target="_blank" rel="noreferrer">Open exact VIA Scan trace ↗</a>}
           </div>
         </section>
       )}
