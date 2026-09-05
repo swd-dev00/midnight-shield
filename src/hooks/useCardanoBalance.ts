@@ -7,8 +7,12 @@ import type { CardanoWalletApi } from './useCardanoWallet'
 export type CardanoBalanceSnapshot = {
   /** Spendable ADA reported across the wallet/VIA spendable set. */
   ada: number
-  /** Total spendable USDM, including VIA release UTxOs at the enterprise address. */
-  usdm: number
+  /**
+   * Total spendable USDM including VIA release UTxOs. Null means the
+   * enterprise-aware chain query is unavailable, so the value is not safe to
+   * use as source readiness or destination-arrival evidence.
+   */
+  usdm: number | null
   /** USDM visible through the connected CIP-30 wallet balance. */
   baseUsdm: number
   /** USDM spendable outside the wallet-reported balance, normally the VIA release address. */
@@ -63,12 +67,12 @@ export function useCardanoBalance(api: CardanoWalletApi | null) {
       })
       setError(null)
     } catch (err) {
-      // Never invent enterprise-address evidence. The wallet-only value is
-      // still useful for ordinary source readiness, but reverse-leg arrival
-      // must stay unverified until the VIA-aware spendable query succeeds.
+      // Do not let a wallet-only balance masquerade as reverse-leg evidence.
+      // The connected wallet value is retained for diagnostics, while the
+      // evidence-bearing total stays unavailable until VIA-aware reads work.
       setBalance({
         ada: baseAda,
-        usdm: baseUsdm,
+        usdm: null,
         baseUsdm,
         enterpriseUsdm: null,
         releaseAware: false,
