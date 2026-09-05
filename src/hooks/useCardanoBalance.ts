@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getLucidWithWallet, getSpendableUtxos } from '@via-labs-tech/usdm-bridge'
 import { CARDANO_USDM_UNIT } from '../config'
-import { decodeBalance } from '../lib/cardanoWallet'
+import { addressHexToBech32, decodeBalance, deriveEnterpriseAddress } from '../lib/cardanoWallet'
 import type { CardanoWalletApi } from './useCardanoWallet'
 
 export type CardanoBalanceSnapshot = {
@@ -19,10 +19,7 @@ export type CardanoBalanceSnapshot = {
   enterpriseAddress: string | null
 }
 
-export function useCardanoBalance(
-  api: CardanoWalletApi | null,
-  enterpriseAddress: string | null,
-) {
+export function useCardanoBalance(api: CardanoWalletApi | null) {
   const [balance, setBalance] = useState<CardanoBalanceSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -37,7 +34,11 @@ export function useCardanoBalance(
     const baseAda = Number(walletValue.lovelace) / 1e6
     const baseUsdm = Number(walletValue.usdm) / 1e6
 
+    let enterpriseAddress: string | null = null
     try {
+      const changeAddress = addressHexToBech32(await api.getChangeAddress())
+      enterpriseAddress = deriveEnterpriseAddress(changeAddress)
+
       // VIA's own spendable set includes released funds at the enterprise
       // address derived from the wallet payment credential. Using the package
       // helper keeps destination verification aligned with the bridge itself.
@@ -57,15 +58,14 @@ export function useCardanoBalance(
         usdm: totalUsdm,
         baseUsdm,
         enterpriseUsdm: Math.max(0, totalUsdm - baseUsdm),
-        releaseAware: Boolean(enterpriseAddress),
+        releaseAware: true,
         enterpriseAddress,
       })
       setError(null)
     } catch (err) {
-      // Never turn a wallet-only balance into destination-arrival proof. The
-      // UI may still use it for ordinary source readiness, but reverse-leg
-      // delivery verification remains unavailable until the VIA-aware query
-      // succeeds.
+      // Never invent enterprise-address evidence. The wallet-only value is
+      // still useful for ordinary source readiness, but reverse-leg arrival
+      // must stay unverified until the VIA-aware spendable query succeeds.
       setBalance({
         ada: baseAda,
         usdm: baseUsdm,
@@ -76,7 +76,7 @@ export function useCardanoBalance(
       })
       setError(err instanceof Error ? err.message : String(err))
     }
-  }, [api, enterpriseAddress])
+  }, [api])
 
   useEffect(() => { void refresh() }, [refresh])
 
