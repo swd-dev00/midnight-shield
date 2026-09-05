@@ -1,25 +1,48 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getLucidWithWallet, getSpendableUtxos } from '@via-labs-tech/usdm-bridge'
 import { CARDANO_USDM_UNIT } from '../config'
 import { addressHexToBech32, decodeBalance, deriveEnterpriseAddress } from '../lib/cardanoWallet'
 import type { CardanoWalletApi } from './useCardanoWallet'
 
+type KoiosAsset = {
+  policy_id: string
+  asset_name: string
+  quantity: string
+}
+
+type KoiosAddressAssets = {
+  address: string
+  asset_list?: KoiosAsset[] | null
+}
+
+const CARDANO_USDM_POLICY_ID = CARDANO_USDM_UNIT.slice(0, 56)
+const CARDANO_USDM_ASSET_NAME = CARDANO_USDM_UNIT.slice(56)
+
+const usdmAtAddress = (rows: KoiosAddressAssets[], address: string): bigint => {
+  const row = rows.find((item) => item.address === address)
+  return (row?.asset_list ?? [])
+    .filter((asset) => (
+      asset.policy_id === CARDANO_USDM_POLICY_ID &&
+      asset.asset_name === CARDANO_USDM_ASSET_NAME
+    ))
+    .reduce((sum, asset) => sum + BigInt(asset.quantity), 0n)
+}
+
 export type CardanoBalanceSnapshot = {
-  /** Spendable ADA reported across the wallet/VIA spendable set. */
+  /** ADA visible through the connected CIP-30 wallet. */
   ada: number
   /**
-   * Total spendable USDM including VIA release UTxOs. Null means the
-   * enterprise-aware chain query is unavailable, so the value is not safe to
-   * use as source readiness or destination-arrival evidence.
+   * Evidence-bearing USDM total across the Cardano base and VIA enterprise
+   * release addresses. Null means that chain observation is unavailable.
    */
   usdm: number | null
-  /** USDM visible through the connected CIP-30 wallet balance. */
+  /** USDM reported by the connected wallet itself. Diagnostic only. */
   baseUsdm: number
-  /** USDM spendable outside the wallet-reported balance, normally the VIA release address. */
+  /** On-chain USDM at the wallet's normal Cardano address. */
+  chainBaseUsdm: number | null
+  /** On-chain USDM at the derived VIA release address. */
   enterpriseUsdm: number | null
-  /** True only when the VIA spendable-UTxO query completed successfully. */
+  /** True only when both Cardano addresses were successfully queried. */
   releaseAware: boolean
-  /** Derived enterprise address used for Midnight → Cardano release verification. */
   enterpriseAddress: string | null
 }
 
@@ -36,44 +59,58 @@ export function useCardanoBalance(api: CardanoWalletApi | null) {
 
     const walletValue = decodeBalance(await api.getBalance())
     const baseAda = Number(walletValue.lovelace) / 1e6
-    const baseUsdm = Number(walletValue.usdm) / 1e6
+    const walletReportedUsdm = Number(walletValue.usdm) / 1e6
 
+    let baseAddress: string | null = null
     let enterpriseAddress: string | null = null
+
     try {
-      const changeAddress = addressHexToBech32(await api.getChangeAddress())
-      enterpriseAddress = deriveEnterpriseAddress(changeAddress)
+      baseAddress = addressHexToBech32(await api.getChangeAddress())
+      enterpriseAddress = deriveEnterpriseAddress(baseAddress)
 
-      // VIA's own spendable set includes released funds at the enterprise
-      // address derived from the wallet payment credential. Using the package
-      // helper keeps destination verification aligned with the bridge itself.
-      const lucid = await getLucidWithWallet(api)
-      const utxos = await getSpendableUtxos(lucid)
+      // The Vite/deployed app proxies this same-origin route to Cardano Preprod
+      // Koios. Query both addresses directly so a successful Midnight → Cardano
+      // release cannot be missed merely because the wallet UI omits enterprise
+      // address UTxOs.
+      const response = await fetch('/koios/address_assets', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ _addresses: [baseAddress, enterpriseAddress] }),
+        cache: 'no-store',
+      })
 
-      let spendableLovelace = 0n
-      let spendableUsdm = 0n
-      for (const utxo of utxos) {
-        spendableLovelace += utxo.assets.lovelace ?? 0n
-        spendableUsdm += utxo.assets[CARDANO_USDM_UNIT] ?? 0n
+      if (!response.ok) {
+        throw new Error(`Koios address_assets returned HTTP ${response.status}`)
       }
 
-      const totalUsdm = Number(spendableUsdm) / 1e6
+      const rows = await response.json() as KoiosAddressAssets[]
+      if (!Array.isArray(rows)) {
+        throw new Error('Koios address_assets returned an unexpected response')
+      }
+
+      const chainBase = usdmAtAddress(rows, baseAddress)
+      const enterprise = usdmAtAddress(rows, enterpriseAddress)
+      const total = chainBase + enterprise
+
       setBalance({
-        ada: Number(spendableLovelace) / 1e6,
-        usdm: totalUsdm,
-        baseUsdm,
-        enterpriseUsdm: Math.max(0, totalUsdm - baseUsdm),
+        ada: baseAda,
+        usdm: Number(total) / 1e6,
+        baseUsdm: walletReportedUsdm,
+        chainBaseUsdm: Number(chainBase) / 1e6,
+        enterpriseUsdm: Number(enterprise) / 1e6,
         releaseAware: true,
         enterpriseAddress,
       })
       setError(null)
     } catch (err) {
-      // Do not let a wallet-only balance masquerade as reverse-leg evidence.
-      // The connected wallet value is retained for diagnostics, while the
-      // evidence-bearing total stays unavailable until VIA-aware reads work.
+      // Never let the normal wallet balance masquerade as reverse-leg arrival
+      // evidence. We keep it for source diagnostics, but the evidence-bearing
+      // Cardano total stays unavailable until both addresses are observable.
       setBalance({
         ada: baseAda,
         usdm: null,
-        baseUsdm,
+        baseUsdm: walletReportedUsdm,
+        chainBaseUsdm: null,
         enterpriseUsdm: null,
         releaseAware: false,
         enterpriseAddress,
