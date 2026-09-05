@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
+import { getEnterpriseAddress } from '@via-labs-tech/usdm-bridge'
 import { CARDANO_USDM_UNIT } from '../config'
-import { addressHexToBech32, decodeBalance, deriveEnterpriseAddress } from '../lib/cardanoWallet'
+import { addressHexToBech32, decodeBalance } from '../lib/cardanoWallet'
 import type { CardanoWalletApi } from './useCardanoWallet'
 
 type KoiosAsset = {
@@ -39,7 +40,7 @@ export type CardanoBalanceSnapshot = {
   baseUsdm: number
   /** On-chain USDM at the wallet's normal Cardano address. */
   chainBaseUsdm: number | null
-  /** On-chain USDM at the derived VIA release address. */
+  /** On-chain USDM at the VIA-derived enterprise release address. */
   enterpriseUsdm: number | null
   /** True only when both Cardano addresses were successfully queried. */
   releaseAware: boolean
@@ -66,7 +67,8 @@ export function useCardanoBalance(api: CardanoWalletApi | null) {
 
     try {
       baseAddress = addressHexToBech32(await api.getChangeAddress())
-      enterpriseAddress = deriveEnterpriseAddress(baseAddress)
+      enterpriseAddress = getEnterpriseAddress(baseAddress)
+      if (!enterpriseAddress) throw new Error('VIA could not derive the Cardano enterprise release address')
 
       // The Vite/deployed app proxies this same-origin route to Cardano Preprod
       // Koios. Query both addresses directly so a successful Midnight → Cardano
