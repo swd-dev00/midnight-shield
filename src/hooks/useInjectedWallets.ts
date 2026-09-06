@@ -19,9 +19,19 @@ export function useInjectedWallets<T extends { name?: string }>(
         .map(([name, wallet]) => ({ name, label: wallet?.name ?? name, api: wallet }))
 
       setWallets((current) => {
-        const currentKey = current.map(({ name, label }) => `${name}:${label}`).join('|')
-        const nextKey = discovered.map(({ name, label }) => `${name}:${label}`).join('|')
-        return currentKey === nextKey ? current : discovered
+        const unchanged =
+          current.length === discovered.length &&
+          current.every((wallet, index) => {
+            const next = discovered[index]
+            return Boolean(
+              next &&
+              wallet.name === next.name &&
+              wallet.label === next.label &&
+              wallet.api === next.api,
+            )
+          })
+
+        return unchanged ? current : discovered
       })
     }
 
@@ -45,7 +55,7 @@ export function useInjectedWallets<T extends { name?: string }>(
       window.removeEventListener('wallet:rescan', run)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-    // scan/exclude are expected to be stable module-level callbacks/values.
+    // scan/exclude are expected to be stable for the lifetime of this hook.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
