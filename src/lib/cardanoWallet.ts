@@ -10,6 +10,31 @@ export function addressHexToBech32(addressHex: string): string {
   return bech32.encode(isMainnet ? 'addr' : 'addr_test', bech32.toWords(bytes), 1000)
 }
 
+/**
+ * VIA's Cardano destination payload carries the payment credential, not a stake
+ * credential. Reconstruct the enterprise address that receives Midnight →
+ * Cardano releases so arrival evidence watches the address VIA actually pays.
+ */
+export function deriveEnterpriseAddress(address: string): string {
+  const decoded = bech32.decode(address, 1000)
+  const bytes = Uint8Array.from(bech32.fromWords(decoded.words))
+  if (bytes.length < 29) throw new Error('Cardano address is too short to contain a payment credential')
+
+  const addressType = bytes[0] >> 4
+  if (addressType === 14 || addressType === 15) {
+    throw new Error('Reward addresses do not contain a payment destination credential')
+  }
+
+  const networkId = bytes[0] & 0x0f
+  const paymentCredentialIsScript = [1, 3, 5, 7].includes(addressType)
+  const enterpriseType = paymentCredentialIsScript ? 7 : 6
+  const enterprise = new Uint8Array(29)
+  enterprise[0] = (enterpriseType << 4) | networkId
+  enterprise.set(bytes.slice(1, 29), 1)
+
+  return bech32.encode(networkId === 1 ? 'addr' : 'addr_test', bech32.toWords(enterprise), 1000)
+}
+
 class CborReader {
   private i = 0
   constructor(private readonly bytes: Uint8Array) {}

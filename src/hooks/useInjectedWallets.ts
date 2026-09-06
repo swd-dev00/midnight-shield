@@ -13,14 +13,50 @@ export function useInjectedWallets<T extends { name?: string }>(
   const [wallets, setWallets] = useState<InjectedWallet<T>[]>([])
 
   useEffect(() => {
-    const run = () => setWallets(
-      Object.entries(scan() ?? {})
-        .filter(([name, w]) => !exclude || (!exclude.test(name) && !exclude.test(w?.name ?? '')))
-        .map(([name, w]) => ({ name, label: w?.name ?? name, api: w })),
-    )
+    const run = () => {
+      const discovered = Object.entries(scan() ?? {})
+        .filter(([name, wallet]) => !exclude || (!exclude.test(name) && !exclude.test(wallet?.name ?? '')))
+        .map(([name, wallet]) => ({ name, label: wallet?.name ?? name, api: wallet }))
+
+      setWallets((current) => {
+        const unchanged =
+          current.length === discovered.length &&
+          current.every((wallet, index) => {
+            const next = discovered[index]
+            return Boolean(
+              next &&
+              wallet.name === next.name &&
+              wallet.label === next.label &&
+              wallet.api === next.api,
+            )
+          })
+
+        return unchanged ? current : discovered
+      })
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') run()
+    }
+
     run()
-    const timers = [250, 1000, 3000].map((delay) => setTimeout(run, delay))
-    return () => timers.forEach(clearTimeout)
+
+    const startupTimers = [250, 1000, 3000].map((delay) => window.setTimeout(run, delay))
+    const interval = window.setInterval(run, 2000)
+
+    window.addEventListener('focus', run)
+    window.addEventListener('wallet:rescan', run)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      startupTimers.forEach(window.clearTimeout)
+      window.clearInterval(interval)
+      window.removeEventListener('focus', run)
+      window.removeEventListener('wallet:rescan', run)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+    // scan/exclude are expected to be stable for the lifetime of this hook.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return wallets
