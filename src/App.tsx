@@ -42,6 +42,8 @@ const truncate = (value?: string | null, left = 10, right = 8) => {
 const formatBalance = (value?: number | null) =>
   value == null ? '—' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 }).format(value)
 
+const rescanWallets = () => window.dispatchEvent(new Event('wallet:rescan'))
+
 const phaseCopy: Record<string, string> = {
   idle: 'Ready for intent',
   building: 'Constructing Cardano transaction',
@@ -387,9 +389,21 @@ export default function App() {
             <div className="wallet-value"><b>{formatBalance(cardanoBalance.balance?.usdm)}</b><span>USDM</span></div>
             <div className="wallet-meta"><span>{truncate(cardano.address)}</span><span>{cardanoBalance.balance ? `${formatBalance(cardanoBalance.balance.ada)} ADA` : 'Fee balance —'}</span></div>
             <div className="wallet-actions">
-              {cardano.api ? <span className="connected-label">Connected · {cardano.name}</span> : cardano.wallets.length ? cardano.wallets.map((wallet) => (
-                <button type="button" key={wallet.name} onClick={() => cardano.connect(wallet)} disabled={cardano.connecting}>Connect {wallet.label}</button>
-              )) : <span className="wallet-empty">No CIP-30 wallet detected</span>}
+              {cardano.api ? (
+                <span className="connected-label">Connected · {cardano.name}</span>
+              ) : cardano.wallets.length ? (
+                <>
+                  {cardano.wallets.length > 1 && <span className="wallet-empty">{cardano.wallets.length} CIP-30 wallets detected</span>}
+                  {cardano.wallets.map((wallet) => (
+                    <button type="button" key={wallet.name} onClick={() => cardano.connect(wallet)} disabled={cardano.connecting}>Connect {wallet.label}</button>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={rescanWallets} disabled={cardano.connecting}>Connect Cardano wallet</button>
+                  <span className="wallet-empty">No CIP-30 provider detected yet. Unlock or enable any CIP-30 wallet in this browser, then try again.</span>
+                </>
+              )}
             </div>
           </article>
 
@@ -398,9 +412,21 @@ export default function App() {
             <div className="wallet-value"><b>{formatBalance(midnightBalance.balance?.usdm)}</b><span>USDM</span></div>
             <div className="wallet-meta"><span>{truncate(midnight.address)}</span><span>{midnightBalance.balance ? `${formatBalance(midnightBalance.balance.dust)} DUST` : 'Execution capacity —'}</span></div>
             <div className="wallet-actions">
-              {midnight.api ? <span className="connected-label">Connected · {midnight.name} · {midnight.networkId}</span> : midnight.wallets.length ? midnight.wallets.map((wallet) => (
-                <button type="button" key={wallet.name} onClick={() => midnight.connect(wallet)} disabled={midnight.connecting}>Connect {wallet.label}</button>
-              )) : <span className="wallet-empty">No connector-v4 wallet detected</span>}
+              {midnight.api ? (
+                <span className="connected-label">Connected · {midnight.name} · {midnight.networkId}</span>
+              ) : midnight.wallets.length ? (
+                <>
+                  {midnight.wallets.length > 1 && <span className="wallet-empty">{midnight.wallets.length} Connector v4 wallets detected</span>}
+                  {midnight.wallets.map((wallet) => (
+                    <button type="button" key={wallet.name} onClick={() => midnight.connect(wallet)} disabled={midnight.connecting}>Connect {wallet.label}</button>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={rescanWallets} disabled={midnight.connecting}>Connect Midnight wallet</button>
+                  <span className="wallet-empty">No Connector API v4 provider detected yet. Unlock or enable any compatible Midnight wallet in this browser, then try again.</span>
+                </>
+              )}
               {midnight.networkId && midnight.networkId !== MIDNIGHT_NETWORK_ID && <span className="wallet-empty">Network mismatch · {midnight.networkId} ≠ {MIDNIGHT_NETWORK_ID}</span>}
             </div>
           </article>
@@ -425,9 +451,9 @@ export default function App() {
               </button>
             </div>
 
-            <label className="amount-field">
+            <label className="amount-field" htmlFor="amount">
               <span>Amount</span>
-              <div><input inputMode="decimal" autoComplete="off" placeholder="0.00" value={amount} onChange={(event) => setAmount(event.target.value)} aria-invalid={attempted && !amountValid} /><b>USDM</b></div>
+              <div><input id="amount" name="amount" inputMode="decimal" autoComplete="off" placeholder="0.00" value={amount} onChange={(event) => setAmount(event.target.value)} aria-invalid={attempted && !amountValid} /><b>USDM</b></div>
               <small>Available on {sourceName}: {formatBalance(sourceBalance)} USDM</small>
             </label>
 
@@ -439,21 +465,21 @@ export default function App() {
 
             {mode !== 'simple' && (
               <div className="advanced-fields">
-                <label>
+                <label htmlFor="intent-label">
                   <span>Intent label</span>
-                  <input value={intentLabel} onChange={(event) => setIntentLabel(event.target.value)} maxLength={64} />
+                  <input id="intent-label" name="intentLabel" value={intentLabel} onChange={(event) => setIntentLabel(event.target.value)} maxLength={64} />
                   <small>Bridge-local metadata. Compact settlement hashes this label; raw text is not written on-chain.</small>
                 </label>
-                <label>
+                <label htmlFor="destination-address">
                   <span>Destination address</span>
-                  <input value={recipient} onChange={(event) => { setManualRecipient(true); setRecipient(event.target.value) }} aria-invalid={attempted && !recipientReady} />
+                  <input id="destination-address" name="destinationAddress" value={recipient} onChange={(event) => { setManualRecipient(true); setRecipient(event.target.value) }} aria-invalid={attempted && !recipientReady} />
                   <small>{manualRecipient ? 'Manual route override active. Balance-delta arrival proof is disabled.' : 'Resolved from the connected destination wallet.'}</small>
                 </label>
                 {manualRecipient && <button type="button" className="text-button" onClick={() => setManualRecipient(false)}>Use connected destination instead</button>}
                 {direction === 'cardano-to-midnight' && (
-                  <label>
+                  <label htmlFor="settlement-recipient">
                     <span>Compact settlement payee</span>
-                    <input value={settlementRecipient} onChange={(event) => { setManualSettlementRecipient(true); setSettlementRecipient(event.target.value) }} />
+                    <input id="settlement-recipient" name="settlementRecipient" value={settlementRecipient} onChange={(event) => { setManualSettlementRecipient(true); setSettlementRecipient(event.target.value) }} />
                     <small>{manualSettlementRecipient ? 'Downstream Midnight payee override.' : 'Defaults to the connected Midnight wallet for a safe self-settlement demo.'}</small>
                   </label>
                 )}
@@ -524,7 +550,7 @@ export default function App() {
             {!compactSettlement.compiledReady ? (
               <><strong>Compact execution is still locked.</strong> Compile the real contract and prepare browser assets with <code>npm run contract:browser</code>. The stub refuses deployment until those artifacts exist.</>
             ) : !midnightNetworkReady ? (
-              <><strong>Preview wallet required.</strong> Connect 1AM on Midnight Preview with Preview DUST before deploying or settling.</>
+              <><strong>Preview wallet required.</strong> Connect a Connector API v4 wallet on Midnight Preview with Preview DUST before deploying or settling.</>
             ) : !settlementRecipientReady ? (
               <><strong>Settlement payee required.</strong> Supply a valid Midnight payee in Advanced mode.</>
             ) : !compactSettlement.contractAddress ? (
