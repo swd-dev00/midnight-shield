@@ -7,10 +7,13 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "contract:compile": "compact compile contracts/usdm-settlement.compact contracts/managed/usdm-settlement",
+    "contract:compile": "node scripts/compile-contract.mjs",
     "contract:prepare-browser": "node scripts/prepare-compact-browser.mjs",
     "contract:browser": "npm run contract:compile && npm run contract:prepare-browser",
-    "contract:integration-build": "npm run contract:browser && npm run build"
+    "contract:integration-build": "npm run contract:browser && npm run build",
+    "test": "node --experimental-strip-types --test tests/validation.test.mjs tests/contract.test.mjs tests/transfer-receipt.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "verify:via-runtime": "node scripts/verify-via-runtime.mjs"
   },
   "dependencies": {
     "@midnight-ntwrk/compact-js": "2.5.1",
@@ -26,7 +29,7 @@
     "@midnight-ntwrk/midnight-js-types": "4.1.1",
     "@midnight-ntwrk/midnight-js-utils": "4.1.1",
     "@midnight-ntwrk/onchain-runtime-v3": "3.0.0",
-    "@via-labs-tech/usdm-bridge": "^1.2.0",
+    "@via-labs-tech/usdm-bridge": "1.2.0",
     "bech32": "^2.0.0",
     "buffer": "^6.0.3",
     "react": "^19.2.8",
@@ -41,7 +44,6 @@
     "typescript": "~5.9.3",
     "vite": "^7.0.0",
     "vite-plugin-node-polyfills": "^0.25.0",
-    "vite-plugin-top-level-await": "^1.6.0",
     "vite-plugin-wasm": "^3.6.0"
   },
   "overrides": {

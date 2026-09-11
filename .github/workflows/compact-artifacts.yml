@@ -1,0 +1,51 @@
+name: Compact proving artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [swd-dev00/compact-artifacts]
+    paths:
+      - contracts/usdm-settlement.compact
+      - .github/workflows/compact-artifacts.yml
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Compact toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/midnightntwrk/compact/releases/download/compact-v0.5.2/compact-installer.sh | sh
+          source "$HOME/.local/bin/env"
+          compact update 0.31.1
+          mkdir -p artifacts
+          compact compile --version | tee artifacts/compiler-version.txt
+          grep -Eq '0\.31\.1' artifacts/compiler-version.txt
+      - name: Compile actual proving files and record provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$HOME/.local/bin/env"
+          compact compile contracts/usdm-settlement.compact artifacts/managed/usdm-settlement
+          test -s artifacts/managed/usdm-settlement/contract/index.js
+          test -s artifacts/managed/usdm-settlement/zkir/settle.zkir
+          test -s artifacts/managed/usdm-settlement/keys/settle.prover
+          test -s artifacts/managed/usdm-settlement/keys/settle.verifier
+          sha256sum contracts/usdm-settlement.compact > artifacts/source.sha256
+          printf '%s\n' "$GITHUB_SHA" > artifacts/commit.txt
+          cd artifacts
+          find managed -type f -print0 | sort -z | xargs -0 sha256sum > files.sha256
+      - name: Upload verified compiler output
+        uses: actions/upload-artifact@v4
+        with:
+          name: compact-0.31.1-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14

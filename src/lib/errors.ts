@@ -8,6 +8,12 @@ export function explainBridgeError(raw: string): FriendlyError {
   const message = raw || 'Unknown bridge error'
   const value = message.toLowerCase()
 
+  if (value.includes('cardano') && value.includes('network')) return {
+    title: 'Cardano needs the Preprod network',
+    guidance: 'Switch the Cardano wallet to Preprod, then start a new intent and reconnect. Mainnet funds cannot be used on this sprint route.',
+    technical: message,
+  }
+
   if (value.includes('network mismatch') || (value.includes('preview') && value.includes('preprod'))) return {
     title: 'Midnight is on the wrong test network',
     guidance: 'VIA testnet pairs Cardano Preprod with Midnight Preview. Switch the Midnight wallet to Preview, let it sync, then reconnect. DUST generated on Midnight Pre-Prod cannot fund the Preview leg.',
@@ -28,7 +34,7 @@ export function explainBridgeError(raw: string): FriendlyError {
 
   if (value.includes('reject') || value.includes('denied') || value.includes('4001')) return {
     title: 'Authorization was not completed',
-    guidance: 'Nothing was sent. Re-run the intent and approve the wallet request when you are ready.',
+    guidance: 'Check your wallet transaction history before starting another intent. Approve the wallet request only when the displayed transaction matches your intent.',
     technical: message,
   }
 
@@ -40,7 +46,7 @@ export function explainBridgeError(raw: string): FriendlyError {
 
   return {
     title: 'The intent did not complete',
-    guidance: 'Your funds were not intentionally retried. Inspect the technical detail, correct the issue, then authorize again.',
+    guidance: 'The outcome may be uncertain. Check your wallet and source transaction history before starting another intent. No transaction is automatically retried.',
     technical: message,
   }
 }

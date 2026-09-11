@@ -1,0 +1,15 @@
+{
+  "package": "@via-labs-tech/usdm-bridge",
+  "version": "1.2.0",
+  "network": "preview",
+  "source": "artifacts/midnight/preview",
+  "route": "/artifacts/midnight",
+  "fileCount": 5,
+  "files": [
+    "contract/index.d.ts",
+    "contract/index.js",
+    "keys/bridge.prover",
+    "keys/bridge.verifier",
+    "zkir/bridge.bzkir"
+  ]
+}

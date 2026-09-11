@@ -7,11 +7,13 @@ export type CardanoBridgeStep = (typeof CARDANO_BRIDGE_STEPS)[number] | 'idle' |
 export function useCardanoBridge(wallet: string | null) {
   const [step, setStep] = useState<CardanoBridgeStep>('idle')
   const [txHash, setTxHash] = useState<string | null>(null)
+  const [acceptedAt, setAcceptedAt] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const bridge = useCallback(async (amount: string, recipient: string) => {
     if (!wallet) throw new Error('Connect a Cardano wallet first')
     setError(null)
+    setAcceptedAt(null)
     setTxHash(null)
     try {
       const { txHash } = await bridgeUSDM({
@@ -19,6 +21,7 @@ export function useCardanoBridge(wallet: string | null) {
         onStatus: (status) => setStep(status as CardanoBridgeStep),
       })
       setTxHash(txHash)
+      setAcceptedAt(new Date().toISOString())
       setStep('done')
       return txHash
     } catch (err) {
@@ -28,5 +31,7 @@ export function useCardanoBridge(wallet: string | null) {
     }
   }, [wallet])
 
-  return { bridge, step, txHash, error }
+  const reset = useCallback(() => { setAcceptedAt(null); setStep('idle'); setError(null); setTxHash(null) }, [])
+
+  return { reset, bridge, acceptedAt, step, txHash, error }
 }

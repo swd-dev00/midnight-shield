@@ -14,9 +14,6 @@ export const MIDNIGHT_USDM_TOKEN_COLOR = '003bacd9a361ba0d425e408776020e40271375
 export const MIDNIGHT_SETTLEMENT_CONTRACT_ADDRESS =
   import.meta.env.VITE_MIDNIGHT_SETTLEMENT_CONTRACT_ADDRESS?.trim() ?? ''
 
-/** Midnight wallets can inject a Cardano stub that cannot sign Cardano transactions. */
-export const NOT_CARDANO = /1am|midnight|mnlace/i
-
 export const cardanoExplorerTxUrl = (txHash: string): string =>
   `https://preprod.cardanoscan.io/transaction/${txHash}`
 

@@ -48,6 +48,14 @@ export async function createBrowserSettlementProviders(api: ConnectedAPI): Promi
     )
   }
 
+  const walletAddress = (await api.getUnshieldedAddress()).unshieldedAddress
+  const assertWalletSession = async () => {
+    if ((await api.getConfiguration()).networkId !== MIDNIGHT_NETWORK_ID ||
+        (await api.getUnshieldedAddress()).unshieldedAddress !== walletAddress) {
+      throw new Error('Midnight wallet account or network changed during execution. Check transaction history before reconnecting.')
+    }
+  }
+
   setNetworkId(configuration.networkId)
 
   const publicDataProvider = indexerPublicDataProvider(
@@ -56,7 +64,7 @@ export async function createBrowserSettlementProviders(api: ConnectedAPI): Promi
   )
 
   const zkConfigProvider = new FetchZkConfigProvider<'settle'>(
-    window.location.origin,
+    new URL('/managed/usdm-settlement/', window.location.origin).href,
     fetch.bind(window),
   )
 
@@ -72,6 +80,7 @@ export async function createBrowserSettlementProviders(api: ConnectedAPI): Promi
     getCoinPublicKey: () => shieldedCoinPublicKey,
     getEncryptionPublicKey: () => shieldedEncryptionPublicKey,
     balanceTx: async (tx) => {
+      await assertWalletSession()
       const { tx: balancedHex } = await api.balanceUnsealedTransaction(
         toHex(tx.serialize()),
         {},
@@ -87,6 +96,7 @@ export async function createBrowserSettlementProviders(api: ConnectedAPI): Promi
 
   const midnightProvider: MidnightProvider = {
     submitTx: async (tx) => {
+      await assertWalletSession()
       await api.submitTransaction(toHex(tx.serialize()))
       const [txId] = tx.identifiers()
       if (!txId) throw new Error('Midnight transaction was submitted without an identifier')

@@ -1,0 +1,312 @@
+{
+  "receiptVersion": "1.2",
+  "canonicalization": "settlement-studio-json-v1",
+  "hashAlgorithm": "SHA-256",
+  "asset": "USDM",
+  "decimals": 6,
+  "route": {
+    "source": "cardano-preprod",
+    "transport": "via",
+    "destination": "midnight-preview"
+  },
+  "intentOrigin": "reconstructed-from-public-evidence",
+  "intent": {
+    "direction": "cardano-to-midnight",
+    "amount": "20",
+    "amountBaseUnits": "20000000",
+    "recipient": "mn_addr_preview1j6f4etxl7jkxc68ykjfa78supprkl334xjjg34ccvaswlmnmphgq076g9s",
+    "recipientKey": "96935cacdff4ac6c68e4b493df1e1c08476fc63534a488d7186760efee7b0dd0",
+    "sourceAddress": "addr_test1qqxj48rqfsu5f5k0x4gxl3w8rpnwzg29wwufpg5thq5wxhj2ngxmsuvuf2x0yzweu6lpe3vtkxfcq2f4lnlgymwjztnqsaah8j",
+    "submittedAt": "2026-09-10T18:46:56.000Z"
+  },
+  "sourceTransactionId": "4b36845ac4b4d23207c44fa69700a9742eee9c52e7ba1ef82f23f15a7b3a50e1",
+  "sdkAcceptedAt": null,
+  "source": {
+    "status": "verified",
+    "detail": "Koios confirms source inclusion and the exact USDM increase at VIA’s deployed lock address.",
+    "transactionId": "4b36845ac4b4d23207c44fa69700a9742eee9c52e7ba1ef82f23f15a7b3a50e1",
+    "amountBaseUnits": "20000000",
+    "block": "5161327",
+    "timestamp": "2026-09-10T18:46:56.000Z",
+    "messageId": null
+  },
+  "transport": {
+    "status": "verified",
+    "detail": "VIA Scan reports delivery and links this source transaction to the deployed Preview contract. Validator signatures are not independently verified.",
+    "transactionId": "e61b3dac3a85022d4387b6bf47f3071f5d636c9a6f702b39ba86b1108c01c74a",
+    "amountBaseUnits": "20000000",
+    "block": "808107",
+    "timestamp": "2026-09-10T18:50:08.447Z",
+    "messageId": "227326600000000000000000000421"
+  },
+  "destination": {
+    "status": "verified",
+    "detail": "Preview indexer confirms the VIA-linked transaction succeeded and credited the exact USDM amount to the intended recipient.",
+    "transactionId": "e61b3dac3a85022d4387b6bf47f3071f5d636c9a6f702b39ba86b1108c01c74a",
+    "amountBaseUnits": "20000000",
+    "block": "808107",
+    "timestamp": "2026-09-10T18:49:54.000Z",
+    "messageId": null,
+    "blockHash": "4410195006360c28f9929ddf32335b9ae86c9a5ce850b7495d13a7944bc5386c",
+    "contractCall": {
+      "address": "471dfe55c866fdbc085c9011a51f0cd0e9c9bfca6bb985c35f7716b6e73e485c",
+      "entryPoint": "process",
+      "status": "SUCCESS"
+    },
+    "fees": {
+      "paidFees": "1",
+      "estimatedFees": "1"
+    }
+  },
+  "correlation": {
+    "sourceToTransport": "4b36845ac4b4d23207c44fa69700a9742eee9c52e7ba1ef82f23f15a7b3a50e1",
+    "transportToDestination": "e61b3dac3a85022d4387b6bf47f3071f5d636c9a6f702b39ba86b1108c01c74a",
+    "evidenceCompleteness": 3,
+    "routeIntegrity": "verified",
+    "amountContinuity": "verified"
+  },
+  "operation": {
+    "requiredEvidenceBoundaries": 5,
+    "verifiedEvidenceBoundaries": 3,
+    "continuity": "unverified",
+    "localProof": {
+      "status": "unverified",
+      "runtime": "unknown",
+      "detail": "Connector API v4 does not attest the selected proving mode. A chain proof does not establish where it was generated."
+    },
+    "applicationSettlement": {
+      "status": "unverified",
+      "detail": "Requires indexed Compact state and an explicit commitment linking it to this transfer. An SDK execution report alone does not establish that link.",
+      "report": null
+    },
+    "returnProofObservation": null
+  },
+  "evidence": {
+    "source": {
+      "observedAt": "2026-09-10T19:33:36.230Z",
+      "provider": "https://preprod.koios.rest/api/v1",
+      "payload": {
+        "status": {
+          "tx_hash": "4b36845ac4b4d23207c44fa69700a9742eee9c52e7ba1ef82f23f15a7b3a50e1",
+          "num_confirmations": 124
+        },
+        "info": {
+          "tx_hash": "4b36845ac4b4d23207c44fa69700a9742eee9c52e7ba1ef82f23f15a7b3a50e1",
+          "valid_contract": null,
+          "block_height": 5161327,
+          "block_hash": "e41c3266f11615d45da595a567a171ef0882be10e5ee7b0003af111c33dc3099",
+          "tx_timestamp": 1789066016
+        },
+        "utxos": {
+          "tx_hash": "4b36845ac4b4d23207c44fa69700a9742eee9c52e7ba1ef82f23f15a7b3a50e1",
+          "inputs": [
+            {
+              "value": "5000000",
+              "tx_hash": "57054205e5ad0f92519fdf4399ea35123b838a7259da436eaf87c7a6086d96d0",
+              "tx_index": 2,
+              "asset_list": [
+                {
+                  "decimals": 0,
+                  "quantity": "1000000000",
+                  "policy_id": "e675b46e4d2242c991a8932a99db3044e80515ae14b4c4ccf6b3f4c9",
+                  "asset_name": "0014df10745553444d",
+                  "fingerprint": "asset13vxxx5fuzj88pqvwad5t8tna9h6hcw7d6fmzjw"
+                }
+              ],
+              "stake_addr": "stake_test1up9f5rdcwxwy4r8jp8v7d0suck9mryuq9y6lel5zdhfp9est9p93x",
+              "payment_addr": {
+                "cred": "0d2a9c604c3944d2cf35506fc5c71866e1214573b890a28bb828e35e",
+                "bech32": "addr_test1qqxj48rqfsu5f5k0x4gxl3w8rpnwzg29wwufpg5thq5wxhj2ngxmsuvuf2x0yzweu6lpe3vtkxfcq2f4lnlgymwjztnqsaah8j"
+              }
+            },
+            {
+              "value": "2000000",
+              "tx_hash": "6649feaf9aae1f77e47270362851e4a38c47708991bd62300a032ddcf91ecfea",
+              "tx_index": 0,
+              "asset_list": [
+                {
+                  "decimals": 0,
+                  "quantity": "1",
+                  "policy_id": "76fbe9f6c8761cc6744c34a1f30915037e38c01197d6e7c9d2fcc1d3",
+                  "asset_name": "",
+                  "fingerprint": "asset1pvue90uapl573u6wtfazp0ddeuttmpmsyjx0wc"
+                },
+                {
+                  "decimals": 0,
+                  "quantity": "22509176976",
+                  "policy_id": "e675b46e4d2242c991a8932a99db3044e80515ae14b4c4ccf6b3f4c9",
+                  "asset_name": "0014df10745553444d",
+                  "fingerprint": "asset13vxxx5fuzj88pqvwad5t8tna9h6hcw7d6fmzjw"
+                }
+              ],
+              "stake_addr": null,
+              "payment_addr": {
+                "cred": "76fbe9f6c8761cc6744c34a1f30915037e38c01197d6e7c9d2fcc1d3",
+                "bech32": "addr_test1wpm0h60kepmpe3n5fs62rucfz5phuwxqzxtade7f6t7vr5clear6h"
+              }
+            }
+          ],
+          "outputs": [
+            {
+              "value": "1923580",
+              "tx_hash": "4b36845ac4b4d23207c44fa69700a9742eee9c52e7ba1ef82f23f15a7b3a50e1",
+              "tx_index": 2,
+              "asset_list": [
+                {
+                  "decimals": 0,
+                  "quantity": "980000000",
+                  "policy_id": "e675b46e4d2242c991a8932a99db3044e80515ae14b4c4ccf6b3f4c9",
+                  "asset_name": "0014df10745553444d",
+                  "fingerprint": "asset13vxxx5fuzj88pqvwad5t8tna9h6hcw7d6fmzjw"
+                }
+              ],
+              "stake_addr": "stake_test1up9f5rdcwxwy4r8jp8v7d0suck9mryuq9y6lel5zdhfp9est9p93x",
+              "payment_addr": {
+                "cred": "0d2a9c604c3944d2cf35506fc5c71866e1214573b890a28bb828e35e",
+                "bech32": "addr_test1qqxj48rqfsu5f5k0x4gxl3w8rpnwzg29wwufpg5thq5wxhj2ngxmsuvuf2x0yzweu6lpe3vtkxfcq2f4lnlgymwjztnqsaah8j"
+              }
+            },
+            {
+              "value": "2000000",
+              "tx_hash": "4b36845ac4b4d23207c44fa69700a9742eee9c52e7ba1ef82f23f15a7b3a50e1",
+              "tx_index": 0,
+              "asset_list": [
+                {
+                  "decimals": 0,
+                  "quantity": "1",
+                  "policy_id": "76fbe9f6c8761cc6744c34a1f30915037e38c01197d6e7c9d2fcc1d3",
+                  "asset_name": "",
+                  "fingerprint": "asset1pvue90uapl573u6wtfazp0ddeuttmpmsyjx0wc"
+                },
+                {
+                  "decimals": 0,
+                  "quantity": "22529176976",
+                  "policy_id": "e675b46e4d2242c991a8932a99db3044e80515ae14b4c4ccf6b3f4c9",
+                  "asset_name": "0014df10745553444d",
+                  "fingerprint": "asset13vxxx5fuzj88pqvwad5t8tna9h6hcw7d6fmzjw"
+                }
+              ],
+              "stake_addr": null,
+              "payment_addr": {
+                "cred": "76fbe9f6c8761cc6744c34a1f30915037e38c01197d6e7c9d2fcc1d3",
+                "bech32": "addr_test1wpm0h60kepmpe3n5fs62rucfz5phuwxqzxtade7f6t7vr5clear6h"
+              }
+            },
+            {
+              "value": "2331710",
+              "tx_hash": "4b36845ac4b4d23207c44fa69700a9742eee9c52e7ba1ef82f23f15a7b3a50e1",
+              "tx_index": 1,
+              "asset_list": [
+                {
+                  "decimals": 0,
+                  "quantity": "1",
+                  "policy_id": "0a91480867eaf274e4000d2a47b3811b21732528ceece70abf05fcc7",
+                  "asset_name": "73656e645f72657175657374",
+                  "fingerprint": "asset1fdlenthttptm2p3xylad5gm734d8cyt2muulhv"
+                }
+              ],
+              "stake_addr": null,
+              "payment_addr": {
+                "cred": "32e297a5a33758b91029faf0eae25f604c00d179bd472e9882a01bcf",
+                "bech32": "addr_test1wqew99a95vm43wgs98a0p6hztasycqx30x75wt5cs2sphncvcvw8y"
+              }
+            }
+          ]
+        }
+      },
+      "evidenceHash": "f5c1ee493bc08e78da2ac47f4396d9133fb13d5185f825d670672d7f9604d572"
+    },
+    "transport": {
+      "observedAt": "2026-09-10T19:31:12.538Z",
+      "provider": "https://scansite.druuu.net/api/v1/transactions/227326600000000000000000000421",
+      "payload": {
+        "messageId": "227326600000000000000000000421",
+        "requestedAt": "2026-09-10T18:48:17.785Z",
+        "deliveredAt": "2026-09-10T18:50:08.447Z",
+        "sourceTx": "4b36845ac4b4d23207c44fa69700a9742eee9c52e7ba1ef82f23f15a7b3a50e1",
+        "destinationTx": "e61b3dac3a85022d4387b6bf47f3071f5d636c9a6f702b39ba86b1108c01c74a",
+        "sourceBlockNumber": "5161327",
+        "destinationBlockNumber": "808107",
+        "sourceChainId": "2273266",
+        "destinationChainId": "64364450",
+        "sourceContract": "0x0000000076fbe9f6c8761cc6744c34a1f30915037e38c01197d6e7c9d2fcc1d3",
+        "destinationContract": "0x471dfe55c866fdbc085c9011a51f0cd0e9c9bfca6bb985c35f7716b6e73e485c",
+        "sourceGateway": "6b91f64bcb1f5f0dd0a1d2d96902d5c2cbd22efdbd8c635487db4372",
+        "destinationGateway": "0x471dfe55c866fdbc085c9011a51f0cd0e9c9bfca6bb985c35f7716b6e73e485c",
+        "chainType": "testnet",
+        "confirmations": 1,
+        "version": 4,
+        "payload": "0x56494c52000000010000000000000000000000000000000000000000000000000000000001312d0048e0d0b7cea01816ba68445fed666b0467148bc06d7fcdb36ed9d7b4bd5eaf24000000000d2a9c604c3944d2cf35506fc5c71866e1214573b890a28bb828e35e003bacd9a361ba0d425e408776020e40271375e8b8de42d73eec046a44947d7396935cacdff4ac6c68e4b493df1e1c08476fc63534a488d7186760efee7b0dd0000000000000000000000000000000000000000000000000000000000000000000000000",
+        "decodedPayload": {
+          "magic": "VILR",
+          "amount": "20000000",
+          "hookData": "0x",
+          "hookDataLen": 0,
+          "sourceToken": "0x48e0d0b7cea01816ba68445fed666b0467148bc06d7fcdb36ed9d7b4bd5eaf24",
+          "destinationToken": "0x003bacd9a361ba0d425e408776020e40271375e8b8de42d73eec046a44947d73",
+          "destinationRecipient": "0x96935cacdff4ac6c68e4b493df1e1c08476fc63534a488d7186760efee7b0dd0"
+        },
+        "deliveryTime": 111,
+        "extras": {
+          "burnSourceBlockNum": "5161329",
+          "burnSourceTransactionHash": "9af144b26a4e4ab4a919353f8e7cb56bcdff55e41117a33279007181a061375d"
+        },
+        "signatures": [],
+        "nodeConfirmations": [
+          {
+            "id": 1492,
+            "messageId": "227326600000000000000000000421",
+            "node": "12D3KooWCa1Gy5sH3f4tQrBrVbtB7ih9GWscRqEJL1znQtr61Zgk",
+            "createdAt": "2026-09-10T18:48:37.869Z"
+          }
+        ]
+      },
+      "evidenceHash": "c38aea044480caa0d8a351a5db4beeea29d31abbb4a8e73c3a8d41df35ce2a25"
+    },
+    "destination": {
+      "observedAt": "2026-09-10T19:31:13.549Z",
+      "provider": "https://indexer.preview.midnight.network/api/v4/graphql",
+      "payload": {
+        "hash": "e61b3dac3a85022d4387b6bf47f3071f5d636c9a6f702b39ba86b1108c01c74a",
+        "transactionResult": {
+          "status": "SUCCESS"
+        },
+        "fees": {
+          "paidFees": "1",
+          "estimatedFees": "1"
+        },
+        "unshieldedSpentOutputs": [],
+        "unshieldedCreatedOutputs": [
+          {
+            "owner": "mn_addr_preview1j6f4etxl7jkxc68ykjfa78supprkl334xjjg34ccvaswlmnmphgq076g9s",
+            "tokenType": "003bacd9a361ba0d425e408776020e40271375e8b8de42d73eec046a44947d73",
+            "value": "20000000"
+          }
+        ],
+        "block": {
+          "height": 808107,
+          "hash": "4410195006360c28f9929ddf32335b9ae86c9a5ce850b7495d13a7944bc5386c",
+          "timestamp": 1789066194000
+        },
+        "contractActions": [
+          {
+            "__typename": "ContractCall",
+            "address": "471dfe55c866fdbc085c9011a51f0cd0e9c9bfca6bb985c35f7716b6e73e485c",
+            "entryPoint": "process"
+          }
+        ]
+      },
+      "evidenceHash": "a544914578b83a5def819a4731f5a1a8a6a76f4da3e9ce8044abc2425883f4be"
+    }
+  },
+  "readErrors": {
+    "source": null,
+    "transport": null,
+    "destination": null
+  },
+  "balanceObservation": null,
+  "verificationBasis": "Read-only Koios Preprod, VIA Scan, and Midnight Preview indexer responses. These providers are trusted; this is not a light-client or validator-signature proof. Balance observations do not establish transfer attribution. Hashes establish record integrity, not authenticity.",
+  "snapshotState": "finalized",
+  "finalizedAt": "2026-09-10T20:32:00.000Z",
+  "receiptHash": "11c621f6e92e3220317f6dc8625bfc34b34a3abe9c620376d48e3c0a8256340f"
+}

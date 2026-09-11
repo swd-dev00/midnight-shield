@@ -2,13 +2,100 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 import wasm from 'vite-plugin-wasm'
-import topLevelAwait from 'vite-plugin-top-level-await'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
+import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
-const bridgeNodeModules = path.resolve(path.dirname(require.resolve('@via-labs-tech/usdm-bridge')), '../node_modules')
+const bridgeEntry = require.resolve('@via-labs-tech/usdm-bridge')
+const sodiumEntry = createRequire(bridgeEntry).resolve('libsodium-wrappers-sumo')
+const VIA_MIDNIGHT_NETWORK = 'preview'
+const VIA_MIDNIGHT_RUNTIME_ROUTE = '/artifacts/midnight'
+
+function findPackageRoot(entry: string): string {
+  let current = path.dirname(entry)
+  while (true) {
+    const candidate = path.join(current, 'package.json')
+    if (fs.existsSync(candidate)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(candidate, 'utf8')) as { name?: string }
+        if (pkg.name === '@via-labs-tech/usdm-bridge') return current
+      } catch {
+        // Continue walking upward until the bridge package root is found.
+      }
+    }
+    const parent = path.dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+  throw new Error('Unable to locate @via-labs-tech/usdm-bridge package root')
+}
+
+function listFilesRecursive(root: string): string[] {
+  const files: string[] = []
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const absolute = path.join(root, entry.name)
+    if (entry.isDirectory()) files.push(...listFilesRecursive(absolute))
+    else files.push(absolute)
+  }
+  return files
+}
+
+const bridgePackageRoot = findPackageRoot(bridgeEntry)
+const bridgePackageJson = JSON.parse(fs.readFileSync(path.join(bridgePackageRoot, 'package.json'), 'utf8')) as { version?: string }
+
+function prepareMidnightZkAssets() {
+  // VIA's browser path expects the selected network's files directly at
+  // /artifacts/midnight — not /artifacts/midnight/preview.
+  const source = path.join(bridgePackageRoot, 'artifacts', 'midnight', VIA_MIDNIGHT_NETWORK)
+  const destination = path.resolve(process.cwd(), 'public', 'artifacts', 'midnight')
+
+  if (!fs.existsSync(source)) {
+    throw new Error(
+      `VIA Midnight ${VIA_MIDNIGHT_NETWORK} ZK assets are missing from @via-labs-tech/usdm-bridge. Browser Midnight → Cardano proving cannot run.`,
+    )
+  }
+
+  if (!destination.startsWith(path.resolve(process.cwd(), 'public') + path.sep)) throw new Error('Unsafe asset destination')
+  fs.rmSync(destination, { recursive: true, force: true })
+  fs.mkdirSync(destination, { recursive: true })
+  fs.cpSync(source, destination, { recursive: true })
+
+  if (fs.existsSync(path.join(destination, VIA_MIDNIGHT_NETWORK))) {
+    throw new Error(
+      `VIA ZK runtime path is nested incorrectly. Expected ${VIA_MIDNIGHT_RUNTIME_ROUTE}/<asset>, not ${VIA_MIDNIGHT_RUNTIME_ROUTE}/${VIA_MIDNIGHT_NETWORK}/<asset>.`,
+    )
+  }
+
+  const copiedFiles = listFilesRecursive(destination)
+    .map((file) => path.relative(destination, file).replaceAll('\\', '/'))
+    .filter((file) => !file.endsWith('.via-assets-ready.json'))
+
+  if (copiedFiles.length === 0) {
+    throw new Error('VIA Midnight ZK artifact directory is empty; refusing to build a reverse-leg browser flow.')
+  }
+
+  fs.writeFileSync(
+    path.join(destination, '.via-assets-ready.json'),
+    JSON.stringify({
+      package: '@via-labs-tech/usdm-bridge',
+      version: bridgePackageJson.version ?? 'unknown',
+      network: VIA_MIDNIGHT_NETWORK,
+      source: `artifacts/midnight/${VIA_MIDNIGHT_NETWORK}`,
+      route: VIA_MIDNIGHT_RUNTIME_ROUTE,
+      fileCount: copiedFiles.length,
+      files: copiedFiles,
+    }, null, 2),
+  )
+}
+
+// Fixed read-only evidence origins. Production hosting must provide these same routes.
+const evidenceProxy = {
+  '/koios': { target: 'https://preprod.koios.rest/api/v1', changeOrigin: true, rewrite: (value: string) => value.replace(/^\/koios/, '') },
+  '^/evidence/via/transactions/[a-fA-F0-9]{64}$': { target: 'https://scansite.druuu.net/api/v1', changeOrigin: true, rewrite: (value: string) => value.replace(/^\/evidence\/via/, '') },
+  '^/evidence/midnight$': { target: 'https://indexer.preview.midnight.network', changeOrigin: true, rewrite: () => '/api/v4/graphql' },
+}
 
 export default defineConfig(({ mode }) => ({
   define: {
@@ -21,6 +108,12 @@ export default defineConfig(({ mode }) => ({
     global: 'globalThis',
   },
   plugins: [
+    {
+      name: 'via-midnight-zk-assets',
+      configResolved() {
+        prepareMidnightZkAssets()
+      },
+    },
     {
       name: 'shim-resolver',
       enforce: 'pre',
@@ -36,10 +129,6 @@ export default defineConfig(({ mode }) => ({
       protocolImports: false,
     }),
     wasm(),
-    topLevelAwait({
-      promiseExportName: '__tla',
-      promiseImportName: (index) => `__tla_${index}`,
-    }),
     {
       name: 'midnight-v3-wasm-module-resolver',
       resolveId(source, importer) {
@@ -59,7 +148,7 @@ export default defineConfig(({ mode }) => ({
     mainFields: ['browser', 'module', 'main'],
     alias: {
       '@midnight-ntwrk/ledger': '@midnight-ntwrk/ledger-v8',
-      'libsodium-wrappers-sumo': path.join(bridgeNodeModules, 'libsodium-wrappers-sumo/dist/modules-sumo/libsodium-wrappers.js'),
+      'libsodium-wrappers-sumo': sodiumEntry,
     },
   },
   optimizeDeps: {
@@ -87,14 +176,10 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: true,
     fs: { allow: ['.', '../..'] },
-    proxy: {
-      '/koios': {
-        target: 'https://preprod.koios.rest/api/v1',
-        changeOrigin: true,
-        rewrite: (value: string) => value.replace(/^\/koios/, ''),
-      },
-    },
+    proxy: evidenceProxy,
   },
+  preview: { proxy: evidenceProxy },
+
   build: {
     target: 'esnext',
     minify: false,

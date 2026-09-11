@@ -44,3 +44,12 @@ A single continuous route visually translates `Intent → source wallet → VIA 
 
 ## Accessibility
 WCAG 2.2 AA target. Native buttons/inputs, visible focus, text labels alongside status color, reduced-motion support, minimum 44px primary touch targets, and no hover-only information.
+
+## Required receipt surface — September 10
+
+Five panels show Source accepted, VIA delivered, Destination verified, Local proof, and Application settlement. Their explicit statuses distinguish SDK reports from provider-backed verification. The shared receipt summary separates 3 / 3 transfer evidence from 5 / 5 operation evidence, route integrity, exact amount continuity, and a wrapping SHA-256 hash. A balance increase remains an observation. Missing evidence never receives verified styling. The surface stacks below 760px, supports frozen partial receipts and local file checks, and keeps retry actions read-only. Compact controls live in Advanced mode, while Compact settlement and a locally proved return are required sprint gates.
+
+A downloadable receipt is a distinct frozen state. Live evidence may update on screen, but download and copy controls remain unavailable until a complete read attempt has settled, `finalizedAt` is set, and the immutable snapshot hash has been computed. Refreshing evidence immediately retires the previous snapshot from those controls. Frozen partial receipts preserve every unverified boundary explicitly.
+
+
+September 10 scope correction: the receipt is a cross-chain correlation surface. Show five evidence boundaries, with 3 / 3 transport distinguished from incomplete 3 / 5 operation evidence. Local execution modality cannot be inferred from wallet identity. Compact settlement and locally proved VIA return are required sprint milestones. Delegate native transaction inspection to CardanoScan, VIA Scan, and 1AM Explorer. Saved receipts remain inspectable without wallets and recompute correlations from saved evidence; hash integrity is not authenticity.

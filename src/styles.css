@@ -20,8 +20,8 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; scrollbar-color: var(--scroll-thumb) var(--scroll-track); }
-body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--canvas); }
+html { scroll-behavior: smooth; scrollbar-color: var(--scroll-thumb) var(--scroll-track); scrollbar-width: auto; }
+body { margin: 0; min-width: 0; min-height: 100vh; background: var(--canvas); }
 button, input { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
@@ -74,7 +74,7 @@ a { color: inherit; }
 .wallet-meta { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 15px; border-bottom: 1px solid var(--line-soft); overflow: hidden; }
 .wallet-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wallet-actions { padding-top: 14px; min-height: 38px; }
-.wallet-actions button { width: 100%; min-height: 36px; border: 1px solid #3a3f4a; background: var(--raised); color: var(--text); border-radius: 4px; font-size: 11px; margin-top: 6px; }
+.wallet-actions button { width: 100%; min-height: 44px; border: 1px solid #3a3f4a; background: var(--raised); color: var(--text); border-radius: 4px; font-size: 11px; margin-top: 6px; }
 .wallet-actions button:hover:not(:disabled) { border-color: var(--gold-soft); }
 .connected-label { color: var(--signal); font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .security-note { display: flex; gap: 10px; margin: 20px 2px 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
@@ -93,7 +93,7 @@ a { color: inherit; }
 .amount-field { display: block; margin-top: 18px; background: var(--surface); border: 1px solid var(--line); padding: 18px; }
 .amount-field > span, .advanced-fields label > span { display: block; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; font: 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .amount-field > div { display: flex; align-items: baseline; gap: 12px; }
-.amount-field input { width: 100%; border: 0; outline: none; color: var(--text); background: transparent; font: 400 clamp(44px, 6vw, 72px)/1 Georgia, serif; letter-spacing: -.04em; padding: 10px 0 3px; }
+.amount-field input { min-width: 0; width: 100%; border: 0; outline: none; color: var(--text); background: transparent; font: 400 clamp(44px, 6vw, 72px)/1 Georgia, serif; letter-spacing: -.04em; padding: 10px 0 3px; }
 .amount-field input::placeholder { color: #343841; }
 .amount-field input[aria-invalid="true"] { color: var(--danger); }
 .amount-field b { font-size: 12px; color: var(--gold); letter-spacing: .12em; }
@@ -176,8 +176,8 @@ footer b { color: var(--gold); font-weight: 500; }
   .topbar { height: auto; min-height: 82px; align-items: flex-start; padding: 16px 0; }
   .topbar-actions { align-items: flex-end; flex-direction: column; gap: 8px; }
   .network-pill { display: none; }
-  .hero { grid-template-columns: 1fr; gap: 30px; min-height: auto; }
-  .workspace { grid-template-columns: 1fr; }
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 30px; min-height: auto; }
+  .workspace { grid-template-columns: minmax(0, 1fr); }
   .wallet-stack { padding: 30px 0; border-right: 0; border-bottom: 1px solid var(--line); }
   .wallet-stack { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .wallet-stack > .section-heading, .wallet-stack > .security-note { grid-column: 1 / -1; }
@@ -187,13 +187,15 @@ footer b { color: var(--gold); font-weight: 500; }
 
 @media (max-width: 640px) {
   .app-shell { width: min(100% - 22px, 520px); }
+  .topbar { flex-wrap: wrap; gap: 16px; }
+  .topbar-actions { width: 100%; align-items: flex-start; }
   .brand small { display: none; }
   .brand b { font-size: 12px; }
   .mode-switch button { padding: 7px 8px; font-size: 10px; }
   .hero { padding: 40px 0 32px; }
-  .hero h1 { font-size: 50px; }
+  .hero h1 { font-size: clamp(34px, 9vw, 50px); }
   .hero-copy { font-size: 14px; }
-  .wallet-stack { grid-template-columns: 1fr; }
+  .wallet-stack { grid-template-columns: minmax(0, 1fr); }
   .wallet-stack > .section-heading, .wallet-stack > .security-note { grid-column: auto; }
   .direction-row { grid-template-columns: 1fr 38px 1fr; }
   .chain-choice { min-height: 84px; padding: 12px; }
@@ -217,3 +219,53 @@ footer b { color: var(--gold); font-weight: 500; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+.intent-fields { border: 0; margin: 0; padding: 0; min-width: 0; }
+.intent-fields:disabled { opacity: .75; }
+
+@media (forced-colors: active) { html { scrollbar-color: auto; } }
+
+.wallet-actions { min-width: 0; overflow-wrap: anywhere; }
+.wallet-setup { display: grid; gap: 8px; margin-top: 12px; font-size: 11px; line-height: 1.6; color: var(--muted); }
+.wallet-setup p { margin: 0; }
+.wallet-setup label { display: grid; gap: 4px; min-width: 0; }
+.wallet-setup input { min-width: 0; width: 100%; min-height: 40px; padding: 8px; border: 1px solid var(--line); background: var(--canvas); color: var(--text); font-size: 11px; }
+.wallet-connection-error { color: var(--danger); font-size: 11px; line-height: 1.6; }
+
+.wallet-diagnostics { min-width: 0; font-size: 11px; line-height: 1.6; }
+.wallet-diagnostics summary { cursor: pointer; padding: 10px 0; }
+.wallet-diagnostics summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.wallet-diagnostics pre { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 10px; }
+.wallet-diagnostics button { width: 100%; }
+
+/* Three observable transfer boundaries share the existing instrument surfaces. */
+.transfer-receipt { margin-top: 2rem; padding: 1.5rem 0; border-top: 1px solid var(--border, #30343c); }
+.transfer-receipt > p { color: var(--muted, #8f96a3); line-height: 1.6; }
+.receipt-boundaries { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+.receipt-boundaries article { min-width: 0; padding: 1.25rem; background: #111319; border: 1px solid #30343c; }
+.receipt-boundaries h2 { font: 600 1rem/1.4 Inter, 'Segoe UI', sans-serif; margin: 0; }
+.receipt-boundaries p { font-size: .875rem; line-height: 1.6; color: #a9b0bc; }
+.receipt-boundaries strong { display: block; font-size: .875rem; color: #d7b56d; }
+.receipt-boundaries [data-status="verified"] strong { color: #6cd9d1; }
+.receipt-boundaries code, .receipt-summary code { display: block; overflow-wrap: anywhere; white-space: normal; font-size: .8rem; }
+.receipt-boundaries a { display: inline-block; padding: .75rem 0; font-size: .875rem; }
+.receipt-summary { display: grid; gap: .75rem; }
+.receipt-summary > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 1rem; }
+.receipt-summary dt { color: #a9b0bc; }
+.receipt-summary dd { margin: 0; min-width: 0; }
+.receipt-actions { display: flex; flex-wrap: wrap; gap: 1rem; }
+.receipt-actions button { min-height: 44px; font-size: .9rem; padding: .75rem .25rem; }
+.receipt-file-check { padding: 1rem 0; border-top: 1px solid #30343c; }
+.receipt-file-check summary { cursor: pointer; min-height: 44px; }
+.receipt-file-check label { display: block; margin-bottom: .75rem; }
+.receipt-file-check input { max-width: 100%; min-height: 44px; }
+.receipt-file-check p { line-height: 1.6; overflow-wrap: anywhere; }
+.optional-compact-toggle { display: flex !important; flex-direction: row !important; align-items: center; gap: .75rem; }
+.optional-compact-toggle input { width: 20px; height: 20px; flex: 0 0 auto; }
+@media (max-width: 760px) { .receipt-boundaries { grid-template-columns: minmax(0, 1fr); } .receipt-summary > div { grid-template-columns: minmax(0, 1fr); gap: .25rem; } }
+
+.receipt-copy { display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
+.receipt-copy small { color: #a9b0bc; max-width: 22rem; }
+.transfer-receipt pre, .saved-receipt > code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-size: .8rem; max-height: 24rem; overflow-y: auto; }
+.saved-receipt { margin-top: 1.5rem; border-top: 1px solid #30343c; padding-top: 1rem; min-width: 0; }
+.receipt-boundaries details { font-size: .875rem; }

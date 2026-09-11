@@ -25,10 +25,16 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Run regression tests
+        run: npm test
 
       - name: Typecheck and build frontend
         run: npm run build
+
+      - name: Verify VIA browser assets
+        run: npm run verify:via-runtime
 
   compact:
     runs-on: ubuntu-latest
@@ -42,7 +48,7 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Install Compact devtools and ledger-8 toolchain
         shell: bash
@@ -67,7 +73,7 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Install Compact devtools and ledger-8 toolchain
         shell: bash

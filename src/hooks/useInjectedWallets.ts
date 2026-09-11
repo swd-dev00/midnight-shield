@@ -1,27 +1,38 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
-export interface InjectedWallet<T> {
-  name: string
-  label: string
-  api: T
-}
+import { discoverWalletProviders, type WalletProvider } from '../lib/walletConnection'
+
+export type InjectedWallet<T> = WalletProvider<T>
 
 export function useInjectedWallets<T extends { name?: string }>(
   scan: () => Record<string, T> | undefined,
-  exclude?: RegExp,
-): InjectedWallet<T>[] {
+  accept?: (wallet: T) => boolean,
+) {
   const [wallets, setWallets] = useState<InjectedWallet<T>[]>([])
+  const source = useRef({ scan, accept })
+  source.current = { scan, accept }
 
-  useEffect(() => {
-    const run = () => setWallets(
-      Object.entries(scan() ?? {})
-        .filter(([name, w]) => !exclude || (!exclude.test(name) && !exclude.test(w?.name ?? '')))
-        .map(([name, w]) => ({ name, label: w?.name ?? name, api: w })),
-    )
-    run()
-    const timers = [250, 1000, 3000].map((delay) => setTimeout(run, delay))
-    return () => timers.forEach(clearTimeout)
+  const refresh = useCallback(() => {
+    const { scan, accept } = source.current
+    const found = discoverWalletProviders(scan(), accept)
+    setWallets(previous => previous.length === found.length && previous.every((wallet, index) =>
+      wallet.name === found[index].name && wallet.label === found[index].label && wallet.api === found[index].api && wallet.aliases.join('\0') === found[index].aliases.join('\0'),
+    ) ? previous : found)
+    return found
   }, [])
 
-  return wallets
+  useEffect(() => {
+    refresh()
+    const whenVisible = () => { if (document.visibilityState === 'visible') refresh() }
+    const timer = window.setInterval(whenVisible, 2000)
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', whenVisible)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', whenVisible)
+    }
+  }, [refresh])
+
+  return { wallets, refresh }
 }

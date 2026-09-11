@@ -68,6 +68,12 @@ USDM uses 6 decimals, so:
 
 Do not substitute the VIA gateway contract address for the token color. Wallets and Compact unshielded token operations identify this asset by **color**.
 
+## Mainnet deployment boundary
+
+The sprint deployment remains on Midnight Preview. VIA's documented mainnet USDM rail does not make a Preview application contract usable on mainnet. The settlement circuit is parameterized by an immutable token color: a future mainnet deployment needs the verified mainnet USDM color, compatible compiled/proving assets, a distinct deployed address, and network-matched wallet providers. It must receive USDM on that network before settling it.
+
+The same settlement and receipt model can be retained, but successful execution must be evidenced independently for each deployment. See the root [production-rail architecture notes](../README.md#production-rail-testnet-sprint) for the coordinated wallet, routing, asset, and evidence boundaries.
+
 ## Settlement receipt
 
 For each unique `settlementId`, the public ledger stores:
@@ -91,3 +97,7 @@ The `settlementId` is caller-supplied and cannot be reused within the deployment
 ## Known implementation boundary
 
 The source contract is now in the competition branch, but generated ZK assets and a deployed Preview address are **not** fabricated in this repository. They must come from a real `compact 0.31.x` compilation and a real Midnight deployment. Once those exist, the UI can replace its current post-bridge handoff with a proven `VIA delivery → Compact settlement → receipt` tail.
+
+## Runtime verification
+
+The stable browser adapter lives in `src/settlement/contract.ts`. Browser preparation checks ZKIR, prover, and verifier files before copying assets. Receipt verification reads the public ledger at the finalized settlement block and compares all receipt fields; a lookup failure can be retried without resending the transaction. `npm test` exercises the generated circuit and rejects duplicate IDs, zero amounts, and mismatched receipt evidence. These are local tests, not live deployment evidence.
